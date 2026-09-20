@@ -3,8 +3,9 @@ package db
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
-	"github.com/LazyEasyDev/LZApp/src/user_manager"
+	usermanager "github.com/LazyEasyDev/LZApp/src/user_manager"
 	"gorm.io/gorm"
 )
 
@@ -15,5 +16,6 @@ func Init(ctx context.Context, database *gorm.DB) error {
 	if err := usermanager.InitData(ctx, database); err != nil {
 		return fmt.Errorf("initialize user data: %w", err)
 	}
+	slog.Info("user table initialized successfully")
 	return nil
 }

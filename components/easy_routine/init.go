@@ -18,5 +18,4 @@ func Init(ctx context.Context, database *gorm.DB) error {
 		return fmt.Errorf("initialize MySQL lease: %w", err)
 	}
 	return nil
-
 }

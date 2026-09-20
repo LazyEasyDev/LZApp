@@ -3,27 +3,49 @@ package cli
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
-	"time"
 
-	"github.com/LazyEasyDev/EasyRoutine"
 	"github.com/LazyEasyDev/LZApp/components"
 	config "github.com/LazyEasyDev/LZApp/config"
+	"github.com/LazyEasyDev/LZApp/src/app"
+	"github.com/LazyEasyDev/LZApp/src/db"
 	urfavecli "github.com/urfave/cli/v3"
 )
 
 func Run(ctx context.Context, args []string) error {
 
 	return (&urfavecli.Command{
-		Name:  "lzapp",
-		Usage: "manage the LZApp service",
+		Name:           "lzapp",
+		Usage:          "manage the LZApp service",
+		DefaultCommand: "start",
 		Before: func(
 			ctx context.Context,
 			command *urfavecli.Command,
 		) (context.Context, error) {
+			// initialize configuration based on the selected profile
 			config.InitConfig(config.Profile(command.String("config")))
-			return ctx, nil
+
+			if command.IsSet("https-port") {
+				config.GetConfig().HTTP.HTTPSPort = command.Int("https-port")
+			}
+
+			//before action execution initialize the components first
+			newCtx := context.WithValue(ctx, "cli_initialize_started", true)
+			init_err := components.Init(ctx, config.GetConfig())
+			if init_err != nil {
+				return newCtx, init_err
+			} else {
+				return newCtx, nil
+			}
+		},
+		After: func(ctx context.Context, command *urfavecli.Command) error {
+			// after action execution,
+			// wait for all routines to complete and close components
+			if ctx.Value("cli_initialize_started") == true {
+				return components.WaitAndClose()
+			} else {
+				return nil
+			}
 		},
 		Flags: []urfavecli.Flag{
 			&urfavecli.StringFlag{
@@ -44,10 +66,6 @@ func Run(ctx context.Context, args []string) error {
 				Name:     "https-port",
 				Usage:    "override the selected configuration's HTTPS port",
 				OnlyOnce: true,
-				Action: func(_ context.Context, command *urfavecli.Command, port int) error {
-					config.GetConfig().HTTP.HTTPSPort = port
-					return nil
-				},
 				Validator: func(port int) error {
 					if port < 1 || port > 65535 {
 						return fmt.Errorf("must be between 1 and 65535")
@@ -58,13 +76,22 @@ func Run(ctx context.Context, args []string) error {
 		},
 		Commands: []*urfavecli.Command{
 			{
+				Name:  "start",
+				Usage: "start the LZApp service",
+				Action: func(ctx context.Context, _ *urfavecli.Command) error {
+					return app.Start(ctx)
+				},
+			},
+			{
 				Name:  "db",
 				Usage: "manage the database",
 				Commands: []*urfavecli.Command{
 					{
-						Name:   "init",
-						Usage:  "create tables and initialize data",
-						Action: cmd_actions,
+						Name:  "init",
+						Usage: "create tables and initialize data",
+						Action: func(ctx context.Context, cmd *urfavecli.Command) error {
+							return db.Init(ctx, components.GetComponents().DB)
+						},
 					},
 				},
 			},
@@ -97,40 +124,9 @@ func Run(ctx context.Context, args []string) error {
 }
 
 func cmd_actions(ctx context.Context, cmd *urfavecli.Command) error {
-
-	//before action execution first initialize the components
-	fundemental_init_err := components.InitFundemental(config.GetConfig())
-	if fundemental_init_err != nil {
-		return fmt.Errorf("initialize fundemental components: %w", fundemental_init_err)
-	}
-
-	err := components.Init(ctx, config.GetConfig())
-	if err != nil {
-		slog.Error("failed to initialize components", "error", err)
-		return fmt.Errorf("initialize components: %w", err)
-	}
-
+	// this is just currently a test function
 	// execute the command action
 	slog.Info("executing command", "command", cmd.Name)
 
-	EasyRoutine.SafeGo(
-		ctx,
-		func(ctx context.Context) {
-			<-ctx.Done()
-			slog.Info("safeGo END!")
-		},
-		func(recovered EasyRoutine.Panic, failures int) EasyRoutine.PanicDecision {
-			log.Printf("attempt %d panicked: %v\n%s", failures, recovered.Value, recovered.Stack)
-			if failures >= 3 {
-				return EasyRoutine.NoRetry()
-			}
-			return EasyRoutine.PanicDecision{
-				Retry: true,
-				After: 30 * time.Second,
-			}
-		},
-	)
-	/////
-	components.Close()
 	return nil
 }

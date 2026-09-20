@@ -32,8 +32,10 @@ type DBConfig struct {
 }
 
 type HTTPConfig struct {
-	Enabled   bool `json:"enabled"`
-	HTTPSPort int  `json:"https_port"`
+	Enabled          bool   `json:"enabled"`
+	HTTPSPort        int    `json:"https_port"`
+	HTTPSCertificate string `json:"https_certificate"`
+	HTTPSKey         string `json:"https_key"`
 }
 
 type EasyRoutineConfig struct {
@@ -52,8 +54,7 @@ type AppConfig struct {
 var default_AppConfig = AppConfig{
 	Profile: ProfileRelease,
 	Log: &LogConfig{
-		Level:       "info",
-		Directory:   "var/lzapp/default",
+		Directory:   "logs",
 		ToTerminal:  true,
 		ShowLogTail: 10,
 	},
@@ -62,20 +63,18 @@ var default_AppConfig = AppConfig{
 	},
 	////optional
 	HTTP: &HTTPConfig{
-		Enabled:   false,
-		HTTPSPort: 8443,
+		Enabled:          false,
+		HTTPSPort:        8443,
+		HTTPSCertificate: PEM_STR,
+		HTTPSKey:         KEY_STR,
 	},
 	DB: &DBConfig{
-		Enabled:  false,
-		Host:     "127.0.0.1",
-		Port:     3306,
-		User:     "lzapp",
-		Password: "lzapp-dev-password",
-		DBName:   "lzapp",
-		Charset:  "utf8mb4",
+		Enabled: false,
+		Host:    "127.0.0.1",
+		Port:    3306,
 	},
 	EasyRoutine: &EasyRoutineConfig{
-		Enabled: false,
+		Enabled: true,
 	},
 }
 

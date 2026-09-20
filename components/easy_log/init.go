@@ -2,7 +2,6 @@ package easylog
 
 import (
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -13,6 +12,10 @@ import (
 )
 
 func Init(logConfig *config.LogConfig) error {
+	if logConfig == nil {
+		return fmt.Errorf("log configuration is required")
+	}
+
 	level, err := parseLevel(logConfig.Level)
 	if err != nil {
 		return err
@@ -22,18 +25,18 @@ func Init(logConfig *config.LogConfig) error {
 		return err
 	}
 
-	var terminal io.Writer
-	if logConfig.ToTerminal {
-		terminal = os.Stderr
-	}
-	return easyloglib.Init(
-		easyloglib.Options{
+	options := easyloglib.InitOptions{
+		Runtime: easyloglib.Options{
 			Level:     level,
 			AddSource: logConfig.AddSource,
 		},
-		&easyloglib.FileOptions{Directory: directory},
-		terminal,
-	)
+		File: &easyloglib.FileOptions{BaseDirectory: directory},
+	}
+	if logConfig.ToTerminal {
+		options.Terminal = &easyloglib.TerminalOptions{Writer: os.Stderr}
+	}
+
+	return easyloglib.Init(options)
 }
 
 func Close() error {
@@ -58,7 +61,7 @@ func parseLevel(value string) (slog.Level, error) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "debug":
 		return slog.LevelDebug, nil
-	case "info":
+	case "info", "":
 		return slog.LevelInfo, nil
 	case "warn", "warning":
 		return slog.LevelWarn, nil
