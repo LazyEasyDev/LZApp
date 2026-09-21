@@ -71,6 +71,7 @@ func Init(ctx context.Context, appConfig *config.AppConfig) error {
 			return fmt.Errorf("initialize HTTP server: %w", err)
 		}
 		runtime.HTTP = server
+		slog.Info("Http server initialized", "https_port", appConfig.HTTP.HTTPSPort)
 	}
 
 	// All components initialized successfully

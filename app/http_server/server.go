@@ -6,7 +6,6 @@ import (
 	"log/slog"
 
 	"github.com/LazyEasyDev/LZApp/components"
-	"github.com/LazyEasyDev/LZApp/config"
 )
 
 func Start(ctx context.Context) error {
@@ -18,6 +17,6 @@ func Start(ctx context.Context) error {
 	slog.Info("Registering HTTP routes")
 	registerRoutes(runtime.HTTP.API())
 	// start the HTTP service
-	slog.Info("Starting HTTPS service", "port", config.GetConfig().HTTP.HTTPSPort)
+	slog.Info("Starting HTTPS service")
 	return runtime.HTTP.Start(ctx)
 }

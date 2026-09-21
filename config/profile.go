@@ -102,5 +102,8 @@ func InitConfig(profile Profile) {
 }
 
 func GetConfig() *AppConfig {
+	if !config_initialized {
+		InitConfig(ProfileRelease)
+	}
 	return currentAppConfig
 }

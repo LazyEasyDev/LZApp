@@ -1,24 +1,27 @@
 package easylog
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/icza/backscanner"
 )
 
 const maxLogRecordBytes = 16 << 20
 
-var logFilePattern = regexp.MustCompile(`^(debug|info|warn|err)_\d{8}_[0-9]+\.jsonl$`)
+var logFilePattern = regexp.MustCompile(`^(debug|info|warn|err)_(\d{8})_([0-9]+)\.jsonl$`)
 
 type ReadOptions struct {
 	Directory string
@@ -27,10 +30,15 @@ type ReadOptions struct {
 }
 
 type storedRecord struct {
-	time     time.Time
-	fileName string
-	line     int
-	data     []byte
+	time time.Time
+	data []byte
+}
+
+type logFile struct {
+	name     string
+	level    string
+	date     string
+	sequence uint64
 }
 
 func Show(writer io.Writer, options ReadOptions) error {
@@ -50,69 +58,97 @@ func Show(writer io.Writer, options ReadOptions) error {
 		return err
 	}
 
-	records, err := readRecords(filepath.Join(directory, "logs"), prefix)
+	records, err := readRecords(filepath.Join(directory, "logs"), prefix, options.Tail)
 	if err != nil {
 		return err
 	}
 	sort.SliceStable(records, func(left, right int) bool {
-		if !records[left].time.Equal(records[right].time) {
-			return records[left].time.Before(records[right].time)
-		}
-		if records[left].fileName != records[right].fileName {
-			return records[left].fileName < records[right].fileName
-		}
-		return records[left].line < records[right].line
+		return records[left].time.After(records[right].time)
 	})
-
 	if len(records) > options.Tail {
-		records = records[len(records)-options.Tail:]
+		records = records[:options.Tail]
 	}
-	for _, record := range records {
-		if _, err := writer.Write(append(record.data, '\n')); err != nil {
+	for index := len(records) - 1; index >= 0; index-- {
+		if _, err := writer.Write(append(records[index].data, '\n')); err != nil {
 			return fmt.Errorf("write log record: %w", err)
 		}
 	}
 	return nil
 }
 
-func readRecords(directory, selectedPrefix string) ([]storedRecord, error) {
+func readRecords(directory, selectedPrefix string, limit int) ([]storedRecord, error) {
 	entries, err := os.ReadDir(directory)
 	if errors.Is(err, fs.ErrNotExist) {
-		return []storedRecord{}, nil
+		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("read log directory: %w", err)
 	}
 
-	var records []storedRecord
+	var files []logFile
 	for _, entry := range entries {
-		if entry.IsDir() || !logFilePattern.MatchString(entry.Name()) {
+		match := logFilePattern.FindStringSubmatch(entry.Name())
+		if entry.IsDir() || match == nil || (selectedPrefix != "" && match[1] != selectedPrefix) {
 			continue
 		}
-		if selectedPrefix != "" && !strings.HasPrefix(entry.Name(), selectedPrefix+"_") {
+		sequence, err := strconv.ParseUint(match[3], 10, 64)
+		if err != nil {
 			continue
 		}
-		fileRecords, err := readLogFile(filepath.Join(directory, entry.Name()), entry.Name())
+		files = append(files, logFile{name: entry.Name(), level: match[1], date: match[2], sequence: sequence})
+	}
+	sort.Slice(files, func(left, right int) bool {
+		if files[left].date != files[right].date {
+			return files[left].date > files[right].date
+		}
+		if files[left].sequence != files[right].sequence {
+			return files[left].sequence > files[right].sequence
+		}
+		return files[left].name > files[right].name
+	})
+
+	var records []storedRecord
+	counts := make(map[string]int)
+	for _, file := range files {
+		remaining := limit - counts[file.level]
+		if remaining == 0 {
+			continue
+		}
+		tail, err := readLogFile(filepath.Join(directory, file.name), remaining)
 		if err != nil {
 			return nil, err
 		}
-		records = append(records, fileRecords...)
+		records = append(records, tail...)
+		counts[file.level] += len(tail)
 	}
 	return records, nil
 }
 
-func readLogFile(filePath, fileName string) ([]storedRecord, error) {
+func readLogFile(filePath string, limit int) ([]storedRecord, error) {
+	fileName := filepath.Base(filePath)
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("open log file %q: %w", fileName, err)
 	}
 	defer file.Close()
-
+	info, err := file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("stat log file %q: %w", fileName, err)
+	}
+	scanner := backscanner.NewOptions(file, int(info.Size()), &backscanner.Options{
+		ChunkSize:     64 * 1024,
+		MaxBufferSize: maxLogRecordBytes,
+	})
 	var records []storedRecord
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64*1024), maxLogRecordBytes)
-	for line := 1; scanner.Scan(); line++ {
-		data := bytes.TrimSpace(scanner.Bytes())
+	for len(records) < limit {
+		data, position, err := scanner.LineBytes()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("read log file %q: %w", fileName, err)
+		}
+		data = bytes.TrimSpace(data)
 		if len(data) == 0 {
 			continue
 		}
@@ -120,37 +156,26 @@ func readLogFile(filePath, fileName string) ([]storedRecord, error) {
 			Time time.Time `json:"time"`
 		}
 		if err := json.Unmarshal(data, &metadata); err != nil {
-			return nil, fmt.Errorf("decode %s line %d: %w", fileName, line, err)
+			return nil, fmt.Errorf("decode %s at byte %d: %w", fileName, position, err)
 		}
 		if metadata.Time.IsZero() {
-			return nil, fmt.Errorf("decode %s line %d: missing time", fileName, line)
+			return nil, fmt.Errorf("decode %s at byte %d: missing time", fileName, position)
 		}
-		records = append(records, storedRecord{
-			time:     metadata.Time,
-			fileName: fileName,
-			line:     line,
-			data:     bytes.Clone(data),
-		})
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("read log file %q: %w", fileName, err)
+		records = append(records, storedRecord{time: metadata.Time, data: bytes.Clone(data)})
 	}
 	return records, nil
 }
 
 func levelPrefix(level string) (string, error) {
-	switch strings.ToLower(strings.TrimSpace(level)) {
-	case "":
+	if strings.TrimSpace(level) == "" {
 		return "", nil
-	case "debug":
-		return "debug", nil
-	case "info":
-		return "info", nil
-	case "warn", "warning":
-		return "warn", nil
-	case "err", "error":
-		return "err", nil
-	default:
-		return "", fmt.Errorf("unknown log level %q", level)
 	}
+	parsed, err := parseLevel(level)
+	if err != nil {
+		return "", err
+	}
+	if parsed == slog.LevelError {
+		return "err", nil
+	}
+	return strings.ToLower(parsed.String()), nil
 }

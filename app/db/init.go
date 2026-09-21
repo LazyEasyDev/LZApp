@@ -2,12 +2,30 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
 	usermanager "github.com/LazyEasyDev/LZApp/app/user_manager"
+	gormdb "github.com/LazyEasyDev/LZApp/components/gorm_db"
+	"github.com/LazyEasyDev/LZApp/config"
 	"gorm.io/gorm"
 )
+
+func Run(ctx context.Context) (runErr error) {
+	appConfig := config.GetConfig()
+	if appConfig == nil || appConfig.DB == nil || !appConfig.DB.Enabled {
+		return fmt.Errorf("database is disabled or not configured")
+	}
+	database, err := gormdb.Init(ctx, appConfig)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		runErr = errors.Join(runErr, gormdb.Close(database))
+	}()
+	return Init(ctx, database)
+}
 
 func Init(ctx context.Context, database *gorm.DB) error {
 	if err := usermanager.CreateTable(ctx, database); err != nil {
