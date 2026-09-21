@@ -1,4 +1,4 @@
-package httpserver
+package chi_http_server
 
 import (
 	"context"
@@ -51,7 +51,17 @@ func Init(httpConfig *config.HTTPConfig) (*Server, error) {
 	}
 
 	router := chi.NewRouter()
-	api := humachi.New(router, huma.DefaultConfig("LZApp API", "1.0.0"))
+	apiConfig := huma.DefaultConfig("LZApp API", "1.0.0")
+	apiConfig.DocsRenderer = huma.DocsRendererScalar
+	apiConfig.DocsRendererConfig = map[string]any{
+		"hideClientButton":   true,
+		"agent":              map[string]any{"disabled": true},
+		"showDeveloperTools": "never",
+		"telemetry":          false,
+		"theme":              "saturn",
+		"darkMode":           true,
+	}
+	api := humachi.New(router, apiConfig)
 
 	server := &Server{
 		api: api,

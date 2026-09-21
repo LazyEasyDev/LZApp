@@ -1,4 +1,4 @@
-package health
+package http_server
 
 import (
 	"context"
@@ -7,8 +7,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 )
 
-func RegisterRoute(api huma.API) {
-
+func registerRoutes(api huma.API) {
 	slog.Debug("Registering health route")
 	huma.Get(api, "/health", func(context.Context, *struct{}) (*healthOutput, error) {
 		response := &healthOutput{}

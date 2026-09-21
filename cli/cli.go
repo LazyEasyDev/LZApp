@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/LazyEasyDev/LZApp/app"
+	"github.com/LazyEasyDev/LZApp/app/db"
 	"github.com/LazyEasyDev/LZApp/components"
 	config "github.com/LazyEasyDev/LZApp/config"
-	"github.com/LazyEasyDev/LZApp/src/app"
-	"github.com/LazyEasyDev/LZApp/src/db"
 	urfavecli "github.com/urfave/cli/v3"
 )
 

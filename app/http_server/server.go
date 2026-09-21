@@ -1,4 +1,4 @@
-package http_service
+package http_server
 
 import (
 	"context"
@@ -6,14 +6,7 @@ import (
 
 	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/LazyEasyDev/LZApp/config"
-	"github.com/danielgtaylor/huma/v2"
-
-	"github.com/LazyEasyDev/LZApp/src/app/http_service/health"
 )
-
-func registerRoutes(api huma.API) {
-	health.RegisterRoute(api)
-}
 
 func Start(ctx context.Context) {
 	runtime := components.GetComponents()
