@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	EasyRoutine "github.com/LazyEasyDev/EasyRoutine"
-	gormdb "github.com/LazyEasyDev/LZApp/components/gorm_db"
+	easyroutinelib "github.com/LazyEasyDev/EasyRoutine"
+	"github.com/LazyEasyDev/LZApp/components/gormdb"
 	"gorm.io/gorm"
 )
 
@@ -14,7 +14,7 @@ func Init(ctx context.Context, database *gorm.DB) error {
 	if err != nil {
 		return fmt.Errorf("get SQL database: %w", err)
 	}
-	if err := EasyRoutine.InitSQLLease(ctx, sqlDB, EasyRoutine.SQLMySQL); err != nil {
+	if err := easyroutinelib.InitSQLLease(ctx, sqlDB, easyroutinelib.SQLMySQL); err != nil {
 		return fmt.Errorf("initialize MySQL lease: %w", err)
 	}
 	return nil

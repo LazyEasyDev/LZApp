@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/LazyEasyDev/EasyRoutine"
+	easyroutinelib "github.com/LazyEasyDev/EasyRoutine"
 	cachelib "github.com/LazyEasyDev/LCache"
 
-	httpserver "github.com/LazyEasyDev/LZApp/components/chi_http_server"
-	easylog "github.com/LazyEasyDev/LZApp/components/easy_log"
-	easyroutine "github.com/LazyEasyDev/LZApp/components/easy_routine"
-	gormdb "github.com/LazyEasyDev/LZApp/components/gorm_db"
+	"github.com/LazyEasyDev/LZApp/components/easylog"
+	"github.com/LazyEasyDev/LZApp/components/easyroutine"
+	"github.com/LazyEasyDev/LZApp/components/gormdb"
+	"github.com/LazyEasyDev/LZApp/components/httpserver"
 	"github.com/LazyEasyDev/LZApp/components/lcache"
 	"github.com/LazyEasyDev/LZApp/config"
 	"gorm.io/gorm"
@@ -79,7 +79,7 @@ func Init(ctx context.Context, appConfig *config.AppConfig) error {
 	return nil
 }
 
-func componentsClose() error {
+func closeComponents() error {
 
 	slog.Info("all components start closing")
 
@@ -102,9 +102,9 @@ func componentsClose() error {
 	}
 
 	if len(errs) > 0 {
-		all_error := errors.Join(errs...)
-		slog.Error("errors occurred while closing components: " + all_error.Error())
-		return all_error
+		combinedErr := errors.Join(errs...)
+		slog.Error("errors occurred while closing components: " + combinedErr.Error())
+		return combinedErr
 	} else {
 		slog.Info("all components successfully closed")
 		return nil
@@ -124,6 +124,6 @@ func WaitAndClose() error {
 		}
 		_ = easylog.Close()
 	}()
-	EasyRoutine.Wait()
-	return componentsClose()
+	easyroutinelib.Wait()
+	return closeComponents()
 }

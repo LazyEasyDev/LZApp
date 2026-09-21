@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"log/slog"
 
-	usermanager "github.com/LazyEasyDev/LZApp/app/user_manager"
-	gormdb "github.com/LazyEasyDev/LZApp/components/gorm_db"
+	"github.com/LazyEasyDev/LZApp/app/users"
+	"github.com/LazyEasyDev/LZApp/components/gormdb"
 	"github.com/LazyEasyDev/LZApp/config"
 	"gorm.io/gorm"
 )
@@ -28,10 +28,10 @@ func Run(ctx context.Context) (runErr error) {
 }
 
 func Init(ctx context.Context, database *gorm.DB) error {
-	if err := usermanager.CreateTable(ctx, database); err != nil {
+	if err := users.CreateTable(ctx, database); err != nil {
 		return fmt.Errorf("create user table: %w", err)
 	}
-	if err := usermanager.InitData(ctx, database); err != nil {
+	if err := users.InitData(ctx, database); err != nil {
 		return fmt.Errorf("initialize user data: %w", err)
 	}
 	slog.Info("user table initialized successfully")

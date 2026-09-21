@@ -1,4 +1,4 @@
-package http_server
+package httpapi
 
 type healthOutput struct {
 	Body struct {

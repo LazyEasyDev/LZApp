@@ -1,4 +1,4 @@
-package chi_http_server
+package httpserver
 
 import (
 	"context"
@@ -83,52 +83,52 @@ func Init(httpConfig *config.HTTPConfig) (*Server, error) {
 	return server, nil
 }
 
-func (myserver *Server) API() huma.API {
-	return myserver.api
+func (srv *Server) API() huma.API {
+	return srv.api
 }
 
-func (myserver *Server) Handler() http.Handler {
-	return myserver.server.Handler
+func (srv *Server) Handler() http.Handler {
+	return srv.server.Handler
 }
 
-func (myserver *Server) SetErrorHandler(handler func(string)) {
+func (srv *Server) SetErrorHandler(handler func(string)) {
 	if handler == nil {
-		myserver.server.ErrorLog = log.New(io.Discard, "", 0)
+		srv.server.ErrorLog = log.New(io.Discard, "", 0)
 		return
 	}
-	myserver.server.ErrorLog = log.New(errorWriter(handler), "", 0)
+	srv.server.ErrorLog = log.New(errorWriter(handler), "", 0)
 }
 
-func (myserver *Server) Start(ctx context.Context) error {
+func (srv *Server) Start(ctx context.Context) error {
 	if ctx == nil {
 		return fmt.Errorf("context is required")
 	}
 
 	shutdownDone := make(chan error, 1)
 	stopShutdown := context.AfterFunc(ctx, func() {
-		shutdownDone <- myserver.shutdown()
+		shutdownDone <- srv.shutdown()
 	})
 
-	serveErr := serveError(myserver.server.ListenAndServeTLS("", ""))
+	serveErr := serveError(srv.server.ListenAndServeTLS("", ""))
 	if stopShutdown() {
 		return serveErr
 	}
 	return errors.Join(serveErr, <-shutdownDone)
 }
 
-func (myserver *Server) Close() error {
-	if myserver == nil || myserver.server == nil {
+func (srv *Server) Close() error {
+	if srv == nil || srv.server == nil {
 		return nil
 	}
-	return myserver.server.Close()
+	return srv.server.Close()
 }
 
-func (myserver *Server) shutdown() error {
+func (srv *Server) shutdown() error {
 	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
-	if err := myserver.server.Shutdown(ctx); err != nil {
-		return errors.Join(fmt.Errorf("shut down HTTP server: %w", err), myserver.Close())
+	if err := srv.server.Shutdown(ctx); err != nil {
+		return errors.Join(fmt.Errorf("shut down HTTP server: %w", err), srv.Close())
 	}
 	return nil
 }

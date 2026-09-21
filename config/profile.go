@@ -66,8 +66,8 @@ func newDefaultConfig() AppConfig {
 		HTTP: &HTTPConfig{
 			Enabled:          false,
 			HTTPSPort:        8443,
-			HTTPSCertificate: PEM_STR,
-			HTTPSKey:         KEY_STR,
+			HTTPSCertificate: HTTPSCertificatePEM,
+			HTTPSKey:         HTTPSPrivateKeyPEM,
 		},
 		DB: &DBConfig{
 			Enabled: false,
@@ -82,10 +82,10 @@ func newDefaultConfig() AppConfig {
 
 var currentAppConfig *AppConfig
 
-var config_initialized bool
+var configInitialized bool
 
 func InitConfig(profile Profile) {
-	if config_initialized {
+	if configInitialized {
 		return
 	}
 
@@ -98,11 +98,11 @@ func InitConfig(profile Profile) {
 		return
 	}
 
-	config_initialized = true
+	configInitialized = true
 }
 
 func GetConfig() *AppConfig {
-	if !config_initialized {
+	if !configInitialized {
 		InitConfig(ProfileRelease)
 	}
 	return currentAppConfig

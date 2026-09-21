@@ -1,3 +1,3 @@
 package config
 
-const KEY_STR = ``
+const HTTPSPrivateKeyPEM = ``

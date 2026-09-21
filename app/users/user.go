@@ -1,4 +1,4 @@
-package usermanager
+package users
 
 import (
 	"context"

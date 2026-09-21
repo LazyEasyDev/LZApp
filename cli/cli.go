@@ -7,8 +7,8 @@ import (
 
 	"github.com/LazyEasyDev/LZApp/app"
 	"github.com/LazyEasyDev/LZApp/app/db"
-	easylog "github.com/LazyEasyDev/LZApp/components/easy_log"
-	config "github.com/LazyEasyDev/LZApp/config"
+	"github.com/LazyEasyDev/LZApp/components/easylog"
+	"github.com/LazyEasyDev/LZApp/config"
 	urfavecli "github.com/urfave/cli/v3"
 )
 
@@ -78,7 +78,7 @@ func Run(ctx context.Context, args []string) error {
 					{
 						Name:  "init",
 						Usage: "create tables and initialize data",
-						Action: func(ctx context.Context, cmd *urfavecli.Command) error {
+						Action: func(ctx context.Context, _ *urfavecli.Command) error {
 							return db.Run(ctx)
 						},
 					},
