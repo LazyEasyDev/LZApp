@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	usermanager "github.com/LazyEasyDev/LZApp/app/src/user_manager"
+	usermanager "github.com/LazyEasyDev/LZApp/app/user_manager"
 	"gorm.io/gorm"
 )
 

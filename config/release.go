@@ -1,7 +1,7 @@
 package config
 
 var releaseAppConfig = func() AppConfig {
-	appConfig := default_AppConfig
+	appConfig := newDefaultConfig()
 	appConfig.Profile = ProfileRelease
 	appConfig.Log.ToTerminal = true
 	appConfig.Log.AddSource = false

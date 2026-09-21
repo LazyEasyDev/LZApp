@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -12,7 +13,10 @@ import (
 	urfavecli "github.com/urfave/cli/v3"
 )
 
-func Run(ctx context.Context, args []string) error {
+func Run(run_ctx context.Context, args []string) error {
+
+	ctx, cancelAll := context.WithCancelCause(run_ctx)
+	defer cancelAll(nil)
 
 	return (&urfavecli.Command{
 		Name:           "lzapp",
@@ -32,17 +36,19 @@ func Run(ctx context.Context, args []string) error {
 			//before action execution initialize the components first
 			newCtx := context.WithValue(ctx, "cli_initialize_started", true)
 			init_err := components.Init(ctx, config.GetConfig())
-			if init_err != nil {
-				return newCtx, init_err
-			} else {
-				return newCtx, nil
-			}
+			return newCtx, init_err
+
 		},
 		After: func(ctx context.Context, command *urfavecli.Command) error {
 			// after action execution,
 			// wait for all routines to complete and close components
 			if ctx.Value("cli_initialize_started") == true {
-				return components.WaitAndClose()
+				cleanupErr := components.WaitAndClose()
+				cause := context.Cause(ctx)
+				if errors.Is(cause, context.Canceled) {
+					cause = nil
+				}
+				return errors.Join(cause, cleanupErr)
 			} else {
 				return nil
 			}
@@ -79,7 +85,7 @@ func Run(ctx context.Context, args []string) error {
 				Name:  "start",
 				Usage: "start the LZApp service",
 				Action: func(ctx context.Context, _ *urfavecli.Command) error {
-					return app.Start(ctx)
+					return app.Start(ctx, cancelAll)
 				},
 			},
 			{

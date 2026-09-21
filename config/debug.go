@@ -1,7 +1,7 @@
 package config
 
 var debugAppConfig = func() AppConfig {
-	appConfig := default_AppConfig
+	appConfig := newDefaultConfig()
 	appConfig.Profile = ProfileDebug
 
 	return appConfig

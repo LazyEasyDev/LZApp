@@ -51,31 +51,33 @@ type AppConfig struct {
 	EasyRoutine *EasyRoutineConfig `json:"easy_routine"`
 }
 
-var default_AppConfig = AppConfig{
-	Profile: ProfileRelease,
-	Log: &LogConfig{
-		Directory:   "logs",
-		ToTerminal:  true,
-		ShowLogTail: 10,
-	},
-	Cache: &LocalCacheConfig{
-		MaxTTLSeconds: 24 * 60 * 60,
-	},
-	////optional
-	HTTP: &HTTPConfig{
-		Enabled:          false,
-		HTTPSPort:        8443,
-		HTTPSCertificate: PEM_STR,
-		HTTPSKey:         KEY_STR,
-	},
-	DB: &DBConfig{
-		Enabled: false,
-		Host:    "127.0.0.1",
-		Port:    3306,
-	},
-	EasyRoutine: &EasyRoutineConfig{
-		Enabled: true,
-	},
+func newDefaultConfig() AppConfig {
+	return AppConfig{
+		Profile: ProfileRelease,
+		Log: &LogConfig{
+			Directory:   "logs",
+			ToTerminal:  true,
+			ShowLogTail: 10,
+		},
+		Cache: &LocalCacheConfig{
+			MaxTTLSeconds: 24 * 60 * 60,
+		},
+		////optional
+		HTTP: &HTTPConfig{
+			Enabled:          false,
+			HTTPSPort:        8443,
+			HTTPSCertificate: PEM_STR,
+			HTTPSKey:         KEY_STR,
+		},
+		DB: &DBConfig{
+			Enabled: false,
+			Host:    "127.0.0.1",
+			Port:    3306,
+		},
+		EasyRoutine: &EasyRoutineConfig{
+			Enabled: true,
+		},
+	}
 }
 
 var currentAppConfig *AppConfig
