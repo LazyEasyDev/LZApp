@@ -31,6 +31,8 @@ func Run(ctx context.Context) (runErr error) {
 }
 
 func Start(ctx context.Context, cancelAll context.CancelCauseFunc) error {
+
+	//start HTTP service if enabled
 	if config.GetConfig().HTTP.Enabled {
 		_, err := easyroutine.SafeGo(
 			ctx, func(taskCtx context.Context) {
@@ -49,5 +51,7 @@ func Start(ctx context.Context, cancelAll context.CancelCauseFunc) error {
 			return err
 		}
 	}
+
+	//implement your code here
 	return nil
 }

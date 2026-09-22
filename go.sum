@@ -1,9 +1,7 @@
 filippo.io/edwards25519 v1.2.0 h1:crnVqOiS4jqYleHd9vaKZ+HKtHfllngJIiOpNpoJsjo=
 filippo.io/edwards25519 v1.2.0/go.mod h1:xzAOLCNug/yB62zG1bQ8uziwrIqIuxhctzJT18Q77mc=
-github.com/DATA-DOG/go-sqlmock v1.5.2 h1:OcvFkGmslmlZibjAjaHm3L//6LiuBgolP7OputlJIzU=
-github.com/DATA-DOG/go-sqlmock v1.5.2/go.mod h1:88MAG/4G7SMwSE3CeA0ZKzrT5CiOU3OJ+JlNzwDqpNU=
-github.com/LazyEasyDev/EasyLog v0.0.0-20260919040350-36c215d82493 h1:pTh71nmhajQFWADljKOIlbk6AUUp4heDuyh1j1+ucvc=
-github.com/LazyEasyDev/EasyLog v0.0.0-20260919040350-36c215d82493/go.mod h1:SYuuIl2CxygK/A0NMkCtmHHfkm20KsGR8F+y3YpqBAM=
+github.com/LazyEasyDev/EasyLog v0.0.0-20260922072808-e308e6a92b44 h1:ipNqKlu9X/GaDQMY87Ero0rYpwUUCAblaiZMBsKdxZg=
+github.com/LazyEasyDev/EasyLog v0.0.0-20260922072808-e308e6a92b44/go.mod h1:SYuuIl2CxygK/A0NMkCtmHHfkm20KsGR8F+y3YpqBAM=
 github.com/LazyEasyDev/EasyRoutine v0.0.0-20260919064601-ef0bc1c54658 h1:GhllFXp1R8BXmjQQ5gt53JOSirC4fiuzyi34FB+tJe4=
 github.com/LazyEasyDev/EasyRoutine v0.0.0-20260919064601-ef0bc1c54658/go.mod h1:uDUb4Dm9jhx7UD/vweQnS9kHBVUvzR6o1GkOp2l6jvM=
 github.com/LazyEasyDev/LCache v0.0.0-20260920064750-f0f4684108b5 h1:2qbxYQdkaxGNoz9c3rVhN1BuBGKj6oIH88rwX+oi4YU=
@@ -26,7 +24,6 @@ github.com/jinzhu/inflection v1.0.0 h1:K317FqzuhWc8YvSVlFMCCUb36O/S9MCKRDI7QkRKD
 github.com/jinzhu/inflection v1.0.0/go.mod h1:h+uFLlag+Qp1Va5pdKtLDYj+kHp5pxUVkryuEj+Srlc=
 github.com/jinzhu/now v1.1.5 h1:/o9tlHleP7gOFmsnYNz3RGnqzefHA47wQpKrrdTIwXQ=
 github.com/jinzhu/now v1.1.5/go.mod h1:d3SSVoowX0Lcu0IBviAWJpolVfI5UJVZZ7cO71lE/z8=
-github.com/kisielk/sqlstruct v0.0.0-20201105191214-5f3e10d3ab46/go.mod h1:yyMNCyc/Ib3bDTKd379tNMpB/7/H5TjM2Y9QJ5THLbE=
 github.com/mattn/go-sqlite3 v1.14.22 h1:2gZY6PC6kBnID23Tichd1K+Z0oS6nE/XwU+Vz/5o4kU=
 github.com/mattn/go-sqlite3 v1.14.22/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
