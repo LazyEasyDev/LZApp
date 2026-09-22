@@ -3,9 +3,10 @@ package config
 var releaseAppConfig = func() AppConfig {
 	appConfig := newDefaultConfig()
 	appConfig.Profile = ProfileRelease
+
+	//
 	appConfig.Log.ToTerminal = true
 	appConfig.Log.AddSource = false
-	appConfig.Log.Level = "debug"
 
 	// Database configuration for release environment
 	appConfig.DB.Enabled = true
@@ -18,7 +19,9 @@ var releaseAppConfig = func() AppConfig {
 	appConfig.HTTP.Enabled = true
 	appConfig.HTTP.HTTPSPort = 443
 
-	appConfig.EasyRoutine.Enabled = true
+	//remove below in released version ,they are here just for convinence
+	appConfig.Log.Level = "debug"
+	appConfig.Log.DirectoryRelative = "cwd"
 
 	return appConfig
 }()

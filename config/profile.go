@@ -8,11 +8,12 @@ const (
 )
 
 type LogConfig struct {
-	Level       string `json:"level"`
-	Directory   string `json:"directory"`
-	AddSource   bool   `json:"add_source"`
-	ToTerminal  bool   `json:"to_terminal"`
-	ShowLogTail uint   `json:"show_log_tail"`
+	Level             string `json:"level"`
+	Directory         string `json:"directory"`
+	DirectoryRelative string `json:"directory_relative"`
+	AddSource         bool   `json:"add_source"`
+	ToTerminal        bool   `json:"to_terminal"`
+	ShowLogTail       uint   `json:"show_log_tail"`
 }
 
 type LocalCacheConfig struct {
@@ -60,9 +61,10 @@ func newDefaultConfig() AppConfig {
 	return AppConfig{
 		Profile: ProfileRelease,
 		Log: &LogConfig{
-			Directory:   "logs",
-			ToTerminal:  true,
-			ShowLogTail: 10,
+			Directory:         "logs",
+			DirectoryRelative: "app",
+			ToTerminal:        true,
+			ShowLogTail:       10,
 		},
 		Cache: &LocalCacheConfig{
 			MaxTTLSeconds: 24 * 60 * 60,

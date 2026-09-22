@@ -20,7 +20,7 @@ func Init(logConfig *config.LogConfig) error {
 	if err != nil {
 		return err
 	}
-	directory, err := ResolveDirectory(logConfig.Directory)
+	directory, err := ResolveDirectory(logConfig.Directory, logConfig.DirectoryRelative)
 	if err != nil {
 		return err
 	}
@@ -43,12 +43,22 @@ func Close() error {
 	return easyloglib.Close()
 }
 
-func ResolveDirectory(directory string) (string, error) {
+func ResolveDirectory(directory, relativeTo string) (string, error) {
 	if directory == "" {
 		return "", fmt.Errorf("log directory is required")
 	}
+	if relativeTo != "" && relativeTo != "cwd" && relativeTo != "app" {
+		return "", fmt.Errorf("log directory_relative must be app or cwd, got %q", relativeTo)
+	}
 	if filepath.IsAbs(directory) {
 		return filepath.Clean(directory), nil
+	}
+	if relativeTo == "app" {
+		executable, err := os.Executable()
+		if err != nil {
+			return "", fmt.Errorf("resolve application directory: %w", err)
+		}
+		return filepath.Join(filepath.Dir(executable), directory), nil
 	}
 	resolved, err := filepath.Abs(directory)
 	if err != nil {

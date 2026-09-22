@@ -24,9 +24,10 @@ const maxLogRecordBytes = 16 << 20
 var logFilePattern = regexp.MustCompile(`^(debug|info|warn|err)_(\d{8})_([0-9]+)\.jsonl$`)
 
 type ReadOptions struct {
-	Directory string
-	Level     string
-	Tail      int
+	Directory         string
+	DirectoryRelative string
+	Level             string
+	Tail              int
 }
 
 type storedRecord struct {
@@ -49,7 +50,7 @@ func Show(writer io.Writer, options ReadOptions) error {
 		return fmt.Errorf("tail must be positive")
 	}
 
-	directory, err := ResolveDirectory(options.Directory)
+	directory, err := ResolveDirectory(options.Directory, options.DirectoryRelative)
 	if err != nil {
 		return err
 	}
@@ -127,6 +128,9 @@ func readRecords(directory, selectedPrefix string, limit int) ([]storedRecord, e
 func readLogFile(filePath string, limit int) ([]storedRecord, error) {
 	fileName := filepath.Base(filePath)
 	file, err := os.Open(filePath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
 	if err != nil {
 		return nil, fmt.Errorf("open log file %q: %w", fileName, err)
 	}
@@ -140,6 +144,7 @@ func readLogFile(filePath string, limit int) ([]storedRecord, error) {
 		MaxBufferSize: maxLogRecordBytes,
 	})
 	var records []storedRecord
+	firstLine := true
 	for len(records) < limit {
 		data, position, err := scanner.LineBytes()
 		if errors.Is(err, io.EOF) {
@@ -148,6 +153,8 @@ func readLogFile(filePath string, limit int) ([]storedRecord, error) {
 		if err != nil {
 			return nil, fmt.Errorf("read log file %q: %w", fileName, err)
 		}
+		trailingFragment := firstLine
+		firstLine = false
 		data = bytes.TrimSpace(data)
 		if len(data) == 0 {
 			continue
@@ -156,6 +163,12 @@ func readLogFile(filePath string, limit int) ([]storedRecord, error) {
 			Time time.Time `json:"time"`
 		}
 		if err := json.Unmarshal(data, &metadata); err != nil {
+			if trailingFragment {
+				var fragment json.RawMessage
+				if errors.Is(json.NewDecoder(bytes.NewReader(data)).Decode(&fragment), io.ErrUnexpectedEOF) {
+					continue
+				}
+			}
 			return nil, fmt.Errorf("decode %s at byte %d: %w", fileName, position, err)
 		}
 		if metadata.Time.IsZero() {
