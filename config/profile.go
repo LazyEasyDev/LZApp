@@ -32,10 +32,15 @@ type DBConfig struct {
 }
 
 type HTTPConfig struct {
-	Enabled          bool   `json:"enabled"`
-	HTTPSPort        int    `json:"https_port"`
-	HTTPSCertificate string `json:"https_certificate"`
-	HTTPSKey         string `json:"https_key"`
+	Enabled                  bool   `json:"enabled"`
+	HTTPSPort                int    `json:"https_port"`
+	HTTPSCertificate         string `json:"https_certificate"`
+	HTTPSKey                 string `json:"https_key"`
+	ReadHeaderTimeoutSeconds int    `json:"read_header_timeout_seconds"`
+	IdleTimeoutSeconds       int    `json:"idle_timeout_seconds"`
+	ReadTimeoutSeconds       int    `json:"read_timeout_seconds"`
+	WriteTimeoutSeconds      int    `json:"write_timeout_seconds"`
+	ShutdownTimeoutSeconds   int    `json:"shutdown_timeout_seconds"`
 }
 
 type EasyRoutineConfig struct {
@@ -64,10 +69,15 @@ func newDefaultConfig() AppConfig {
 		},
 		////optional
 		HTTP: &HTTPConfig{
-			Enabled:          false,
-			HTTPSPort:        8443,
-			HTTPSCertificate: HTTPSCertificatePEM,
-			HTTPSKey:         HTTPSPrivateKeyPEM,
+			Enabled:                  false,
+			HTTPSPort:                8443,
+			HTTPSCertificate:         HTTPSCertificatePEM,
+			HTTPSKey:                 HTTPSPrivateKeyPEM,
+			ReadHeaderTimeoutSeconds: 10,
+			IdleTimeoutSeconds:       60,
+			ReadTimeoutSeconds:       0,
+			WriteTimeoutSeconds:      0,
+			ShutdownTimeoutSeconds:   60,
 		},
 		DB: &DBConfig{
 			Enabled: false,

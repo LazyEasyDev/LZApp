@@ -24,11 +24,10 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-const shutdownTimeout = 60 * time.Second
-
 type Server struct {
-	api    huma.API
-	server *http.Server
+	api             huma.API
+	server          *http.Server
+	shutdownTimeout time.Duration
 }
 
 type errorWriter func(string)
@@ -44,6 +43,24 @@ func Init(httpConfig *config.HTTPConfig) (*Server, error) {
 	}
 	if httpConfig.HTTPSPort < 1 || httpConfig.HTTPSPort > 65535 {
 		return nil, fmt.Errorf("HTTPS port must be between 1 and 65535")
+	}
+	const maxTimeoutSeconds = int64((1<<63 - 1) / time.Second)
+	for _, timeout := range []struct {
+		name    string
+		seconds int
+	}{
+		{"read_header_timeout_seconds", httpConfig.ReadHeaderTimeoutSeconds},
+		{"idle_timeout_seconds", httpConfig.IdleTimeoutSeconds},
+		{"read_timeout_seconds", httpConfig.ReadTimeoutSeconds},
+		{"write_timeout_seconds", httpConfig.WriteTimeoutSeconds},
+		{"shutdown_timeout_seconds", httpConfig.ShutdownTimeoutSeconds},
+	} {
+		if timeout.seconds < 0 || int64(timeout.seconds) > maxTimeoutSeconds {
+			return nil, fmt.Errorf("%s must be between 0 and %d", timeout.name, maxTimeoutSeconds)
+		}
+	}
+	if httpConfig.ShutdownTimeoutSeconds == 0 {
+		return nil, fmt.Errorf("shutdown_timeout_seconds must be positive")
 	}
 	certificate, err := httpsCertificate(httpConfig)
 	if err != nil {
@@ -64,11 +81,15 @@ func Init(httpConfig *config.HTTPConfig) (*Server, error) {
 	api := humachi.New(router, apiConfig)
 
 	server := &Server{
-		api: api,
+		api:             api,
+		shutdownTimeout: time.Duration(httpConfig.ShutdownTimeoutSeconds) * time.Second,
 		server: &http.Server{
 			Addr:              net.JoinHostPort("", strconv.Itoa(httpConfig.HTTPSPort)),
 			Handler:           router,
-			ReadHeaderTimeout: 10 * time.Second,
+			ReadHeaderTimeout: time.Duration(httpConfig.ReadHeaderTimeoutSeconds) * time.Second,
+			IdleTimeout:       time.Duration(httpConfig.IdleTimeoutSeconds) * time.Second,
+			ReadTimeout:       time.Duration(httpConfig.ReadTimeoutSeconds) * time.Second,
+			WriteTimeout:      time.Duration(httpConfig.WriteTimeoutSeconds) * time.Second,
 			TLSConfig: &tls.Config{
 				MinVersion:   tls.VersionTLS12,
 				Certificates: []tls.Certificate{certificate},
@@ -124,7 +145,7 @@ func (srv *Server) Close() error {
 }
 
 func (srv *Server) shutdown() error {
-	ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), srv.shutdownTimeout)
 	defer cancel()
 
 	if err := srv.server.Shutdown(ctx); err != nil {

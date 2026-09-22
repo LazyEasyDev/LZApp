@@ -138,14 +138,16 @@ func closeComponents() error {
 // WaitAndClose waits for all routines to complete and then closes all initialized components.
 // Local cache and easylog are closed after all routines have completed.
 // Previous global slog is restored after all components have been closed.
-func WaitAndClose() error {
+func WaitAndClose() (closeErr error) {
 	slog.Info("waiting for all routines to complete before closing components")
 	//wait for all routines to complete
 	defer func() {
 		if runtime.LCache != nil {
 			runtime.LCache.Close()
 		}
-		_ = easylog.Close()
+		if err := easylog.Close(); err != nil {
+			closeErr = errors.Join(closeErr, fmt.Errorf("close logging: %w", err))
+		}
 	}()
 	easyroutinelib.Wait()
 	return closeComponents()
