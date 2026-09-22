@@ -2,12 +2,11 @@ package db
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 
 	"github.com/LazyEasyDev/LZApp/app/users"
-	"github.com/LazyEasyDev/LZApp/components/gormdb"
+	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/LazyEasyDev/LZApp/config"
 	"gorm.io/gorm"
 )
@@ -17,14 +16,13 @@ func Run(ctx context.Context) (runErr error) {
 	if appConfig == nil || appConfig.DB == nil || !appConfig.DB.Enabled {
 		return fmt.Errorf("database is disabled or not configured")
 	}
-	database, err := gormdb.Init(ctx, appConfig)
-	if err != nil {
-		return err
+	// Initialize the database component
+	db, init_err := components.InitDB(ctx, appConfig)
+	if init_err != nil {
+		return fmt.Errorf("initialize database: %w", init_err)
 	}
-	defer func() {
-		runErr = errors.Join(runErr, gormdb.Close(database))
-	}()
-	return Init(ctx, database)
+	// Set up the necessary tables and initial data.
+	return Init(ctx, db)
 }
 
 func Init(ctx context.Context, database *gorm.DB) error {

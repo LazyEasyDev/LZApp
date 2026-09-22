@@ -36,6 +36,44 @@ func GetComponents() Runtime {
 	Any Error will result in system termination.
 */
 
+func InitDB(ctx context.Context, appConfig *config.AppConfig) (*gorm.DB, error) {
+	if !appConfig.DB.Enabled {
+		return nil, nil
+	}
+	return gormdb.Init(ctx, appConfig)
+}
+
+func CloseDB() error {
+	if runtime.DB != nil {
+		err := gormdb.Close(runtime.DB)
+		if err != nil {
+			slog.Error("failed to close database:" + err.Error())
+			return fmt.Errorf("close database: %w", err)
+		}
+		slog.Info("DB closed")
+	}
+	return nil
+}
+
+func InitHttpServer(appConfig *config.AppConfig) (*httpserver.Server, error) {
+	if !appConfig.HTTP.Enabled {
+		return nil, nil
+	}
+	return httpserver.Init(appConfig.HTTP)
+}
+
+func CloseHttpServer() error {
+	if runtime.HTTP != nil {
+		err := runtime.HTTP.Close()
+		if err != nil {
+			slog.Error("failed to close HTTP server:" + err.Error())
+			return fmt.Errorf("close HTTP server: %w", err)
+		}
+		slog.Info("HTTP server closed")
+	}
+	return nil
+}
+
 func Init(ctx context.Context, appConfig *config.AppConfig) error {
 	// Initialize the logging system
 	if err := easylog.Init(appConfig.Log); err != nil {
@@ -45,15 +83,10 @@ func Init(ctx context.Context, appConfig *config.AppConfig) error {
 	// Initialize the local cache
 	runtime.LCache = lcache.Init(appConfig.Cache)
 
-	if appConfig.DB.Enabled {
-		// Initialize the database if enabled
-		database, err := gormdb.Init(ctx, appConfig)
-		if err != nil {
-			slog.Error("failed to initialize database:" + err.Error())
-			return fmt.Errorf("initialize database: %w", err)
-		}
-		runtime.DB = database
-
+	if db, err := InitDB(ctx, appConfig); err != nil {
+		return fmt.Errorf("initialize database: %w", err)
+	} else {
+		runtime.DB = db
 		// Initialize the routine coordinator if enabled
 		if appConfig.EasyRoutine.Enabled {
 			if err := easyroutine.Init(ctx, runtime.DB); err != nil {
@@ -62,14 +95,10 @@ func Init(ctx context.Context, appConfig *config.AppConfig) error {
 			}
 		}
 	}
-
 	// Initialize the HTTP server if enabled
-	if appConfig.HTTP.Enabled {
-		server, err := httpserver.Init(appConfig.HTTP)
-		if err != nil {
-			slog.Error("failed to initialize HTTP server:" + err.Error())
-			return fmt.Errorf("initialize HTTP server: %w", err)
-		}
+	if server, err := InitHttpServer(appConfig); err != nil {
+		return fmt.Errorf("initialize HTTP server: %w", err)
+	} else {
 		runtime.HTTP = server
 		slog.Info("Http server initialized", "https_port", appConfig.HTTP.HTTPSPort)
 	}
@@ -84,21 +113,15 @@ func closeComponents() error {
 	slog.Info("all components start closing")
 
 	var errs []error
+
 	// Close the HTTP server if it was initialized
-	if runtime.HTTP != nil {
-		err := runtime.HTTP.Close()
-		if err != nil {
-			errs = append(errs, err)
-		}
-		slog.Info("http service closed")
+	if err := CloseHttpServer(); err != nil {
+		errs = append(errs, err)
 	}
+
 	// Close the database if it was initialized
-	if runtime.DB != nil {
-		err := gormdb.Close(runtime.DB)
-		if err != nil {
-			errs = append(errs, err)
-		}
-		slog.Info("DB closed")
+	if err := CloseDB(); err != nil {
+		errs = append(errs, err)
 	}
 
 	if len(errs) > 0 {
