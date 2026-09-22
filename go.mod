@@ -3,6 +3,7 @@ module github.com/LazyEasyDev/LZApp
 go 1.25.13
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/LazyEasyDev/EasyLog v0.0.0-20260919040350-36c215d82493
 	github.com/LazyEasyDev/EasyRoutine v0.0.0-20260919064601-ef0bc1c54658
 	github.com/LazyEasyDev/LCache v0.0.0-20260920064750-f0f4684108b5

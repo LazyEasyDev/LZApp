@@ -19,7 +19,10 @@ import (
 	"github.com/icza/backscanner"
 )
 
-const maxLogRecordBytes = 16 << 20
+const (
+	maxLogRecordBytes = 16 << 20
+	logReadChunkBytes = 64 << 10
+)
 
 var logFilePattern = regexp.MustCompile(`^(debug|info|warn|err)_(\d{8})_([0-9]+)\.jsonl$`)
 
@@ -140,8 +143,8 @@ func readLogFile(filePath string, limit int) ([]storedRecord, error) {
 		return nil, fmt.Errorf("stat log file %q: %w", fileName, err)
 	}
 	scanner := backscanner.NewOptions(file, int(info.Size()), &backscanner.Options{
-		ChunkSize:     64 * 1024,
-		MaxBufferSize: maxLogRecordBytes,
+		ChunkSize:     logReadChunkBytes,
+		MaxBufferSize: maxLogRecordBytes + logReadChunkBytes + 2,
 	})
 	var records []storedRecord
 	firstLine := true
@@ -152,6 +155,9 @@ func readLogFile(filePath string, limit int) ([]storedRecord, error) {
 		}
 		if err != nil {
 			return nil, fmt.Errorf("read log file %q: %w", fileName, err)
+		}
+		if len(data) > maxLogRecordBytes {
+			return nil, fmt.Errorf("read log file %q at byte %d: %w", fileName, position, backscanner.ErrLongLine)
 		}
 		trailingFragment := firstLine
 		firstLine = false

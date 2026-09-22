@@ -36,11 +36,16 @@ func GetComponents() Runtime {
 	Any Error will result in system termination.
 */
 
-func InitDB(ctx context.Context, appConfig *config.AppConfig) (*gorm.DB, error) {
+func InitDB(ctx context.Context, appConfig *config.AppConfig) error {
 	if !appConfig.DB.Enabled {
-		return nil, nil
+		return nil
 	}
-	return gormdb.Init(ctx, appConfig)
+	db, err := gormdb.Init(ctx, appConfig)
+	if err != nil {
+		return fmt.Errorf("initialize database: %w", err)
+	}
+	runtime.DB = db
+	return nil
 }
 
 func CloseDB() error {
@@ -83,12 +88,11 @@ func Init(ctx context.Context, appConfig *config.AppConfig) error {
 	// Initialize the local cache
 	runtime.LCache = lcache.Init(appConfig.Cache)
 
-	if db, err := InitDB(ctx, appConfig); err != nil {
+	if err := InitDB(ctx, appConfig); err != nil {
 		return fmt.Errorf("initialize database: %w", err)
 	} else {
-		runtime.DB = db
 		// Initialize the routine coordinator if enabled
-		if appConfig.EasyRoutine.Enabled {
+		if runtime.DB != nil && appConfig.EasyRoutine.Enabled {
 			if err := easyroutine.Init(ctx, runtime.DB); err != nil {
 				slog.Error("failed to initialize routine coordinator:" + err.Error())
 				return fmt.Errorf("initialize routine coordinator: %w", err)
