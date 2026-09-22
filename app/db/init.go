@@ -19,7 +19,7 @@ func Run(ctx context.Context) (runErr error) {
 	// Initialize the database component
 	init_err := components.InitDB(ctx, appConfig)
 	if init_err != nil {
-		return fmt.Errorf("initialize database: %w", init_err)
+		return init_err
 	}
 	defer func() {
 		if err := components.CloseDB(); err != nil {

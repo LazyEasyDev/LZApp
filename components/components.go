@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
 
 	easyroutinelib "github.com/LazyEasyDev/EasyRoutine"
 	cachelib "github.com/LazyEasyDev/LCache"
@@ -40,6 +41,7 @@ func InitDB(ctx context.Context, appConfig *config.AppConfig) error {
 	if !appConfig.DB.Enabled {
 		return nil
 	}
+	slog.Info("initialize database...")
 	db, err := gormdb.Init(ctx, appConfig)
 	if err != nil {
 		return fmt.Errorf("initialize database: %w", err)
@@ -64,6 +66,7 @@ func InitHttpServer(appConfig *config.AppConfig) (*httpserver.Server, error) {
 	if !appConfig.HTTP.Enabled {
 		return nil, nil
 	}
+	slog.Info("initialize httpserver...")
 	return httpserver.Init(appConfig.HTTP)
 }
 
@@ -80,16 +83,19 @@ func CloseHttpServer() error {
 }
 
 func Init(ctx context.Context, appConfig *config.AppConfig) error {
+
 	// Initialize the logging system
 	if err := easylog.Init(appConfig.Log); err != nil {
 		slog.Error("failed to initialize logging:" + err.Error())
 		return fmt.Errorf("initialize logging: %w", err)
 	}
+
+	slog.Info("----------initialize components..................-------------")
 	// Initialize the local cache
 	runtime.LCache = lcache.Init(appConfig.Cache)
 
 	if err := InitDB(ctx, appConfig); err != nil {
-		return fmt.Errorf("initialize database: %w", err)
+		return err
 	} else {
 		// Initialize the routine coordinator if enabled
 		if runtime.DB != nil && appConfig.EasyRoutine.Enabled {
@@ -108,13 +114,13 @@ func Init(ctx context.Context, appConfig *config.AppConfig) error {
 	}
 
 	// All components initialized successfully
-	slog.Info("all components initialized successfully")
+	slog.Info("----------all components initialized successfully-------------")
 	return nil
 }
 
 func closeComponents() error {
-
-	slog.Info("all components start closing")
+	fmt.Fprintln(os.Stderr) //ctr+c signal for newline
+	slog.Info("----------closing components..................----------------")
 
 	var errs []error
 
@@ -133,7 +139,7 @@ func closeComponents() error {
 		slog.Error("errors occurred while closing components: " + combinedErr.Error())
 		return combinedErr
 	} else {
-		slog.Info("all components successfully closed")
+		slog.Info("----------all components successfully closed------------------")
 		return nil
 	}
 
@@ -144,6 +150,7 @@ func closeComponents() error {
 // Previous global slog is restored after all components have been closed.
 func WaitAndClose() (closeErr error) {
 	slog.Info("waiting for all routines to complete before closing components")
+	slog.Info("--------------------------------------------------------------")
 	//wait for all routines to complete
 	defer func() {
 		if runtime.LCache != nil {
@@ -153,6 +160,7 @@ func WaitAndClose() (closeErr error) {
 			closeErr = errors.Join(closeErr, fmt.Errorf("close logging: %w", err))
 		}
 	}()
+
 	easyroutinelib.Wait()
 	return closeComponents()
 }
