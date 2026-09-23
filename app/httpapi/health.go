@@ -2,6 +2,6 @@ package httpapi
 
 type healthOutput struct {
 	Body struct {
-		Status string `json:"status" example:"ok"`
+		ServerUnixTime int64 `json:"server_unix_time" example:"1680000000"`
 	}
 }

@@ -68,7 +68,10 @@ func Init(httpConfig *config.HTTPConfig) (*Server, error) {
 	}
 
 	router := chi.NewRouter()
+	huma.NewError = newError
 	apiConfig := huma.DefaultConfig("LZApp API", "1.0.0")
+	apiConfig.CreateHooks = nil
+	apiConfig.SchemasPath = ""
 	apiConfig.DocsRenderer = huma.DocsRendererScalar
 	apiConfig.DocsRendererConfig = map[string]any{
 		"hideClientButton":   true,
