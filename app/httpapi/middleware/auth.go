@@ -18,10 +18,10 @@ type AuthHandler func(context.Context, string) (AuthIdentity, error)
 type authIdentityContextKey struct{}
 
 func ValidateHMACToken(_ context.Context, token string) (AuthIdentity, error) {
-	payload, err := components.GetComponents().Security.Verify(token)
-	if err != nil {
+	if err := components.GetComponents().Security.Verify(token); err != nil {
 		return AuthIdentity{}, err
 	}
+	payload, _, _ := strings.Cut(token, ".")
 	return AuthIdentity{Subject: payload}, nil
 }
 

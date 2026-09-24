@@ -81,31 +81,31 @@ func (signer *HMACTokenSigner) Generate() (string, error) {
 		base64.RawURLEncoding.EncodeToString(signer.signature(payload)), nil
 }
 
-func (signer *HMACTokenSigner) Verify(token string) (string, error) {
+func (signer *HMACTokenSigner) Verify(token string) error {
 	if signer == nil || len(signer.key) < sha256.Size {
-		return "", ErrNotInitialized
+		return ErrNotInitialized
 	}
 	payloadSize := base64.RawURLEncoding.EncodedLen(signer.payloadBytes)
 	signatureSize := base64.RawURLEncoding.EncodedLen(signer.signatureBytes)
 	if len(token) != payloadSize+signatureSize+1 {
-		return "", ErrInvalidHMACToken
+		return ErrInvalidHMACToken
 	}
 	payloadText, signatureText, found := strings.Cut(token, ".")
 	if !found || len(payloadText) != payloadSize || len(signatureText) != signatureSize {
-		return "", ErrInvalidHMACToken
+		return ErrInvalidHMACToken
 	}
 	payload, err := base64.RawURLEncoding.Strict().DecodeString(payloadText)
 	if err != nil || len(payload) != signer.payloadBytes || base64.RawURLEncoding.EncodeToString(payload) != payloadText {
-		return "", ErrInvalidHMACToken
+		return ErrInvalidHMACToken
 	}
 	signature, err := base64.RawURLEncoding.Strict().DecodeString(signatureText)
 	if err != nil || len(signature) != signer.signatureBytes || base64.RawURLEncoding.EncodeToString(signature) != signatureText {
-		return "", ErrInvalidHMACToken
+		return ErrInvalidHMACToken
 	}
 	if !hmac.Equal(signature, signer.signature(payload)) {
-		return "", ErrInvalidHMACToken
+		return ErrInvalidHMACToken
 	}
-	return payloadText, nil
+	return nil
 }
 
 func (signer *HMACTokenSigner) signature(payload []byte) []byte {

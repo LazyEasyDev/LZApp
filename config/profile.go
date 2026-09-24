@@ -39,6 +39,7 @@ type DBConfig struct {
 
 type HTTPConfig struct {
 	Enabled                  bool   `json:"enabled"`
+	APITokenCookieName       string `json:"api_token_cookie_name"`
 	HTTPSPort                int    `json:"https_port"`
 	HTTPSCertificate         string `json:"https_certificate"`
 	HTTPSKey                 string `json:"https_key"`
@@ -82,6 +83,7 @@ func newDefaultConfig() AppConfig {
 		////optional
 		HTTP: &HTTPConfig{
 			Enabled:                  false,
+			APITokenCookieName:       "api_token",
 			HTTPSPort:                8443,
 			HTTPSCertificate:         HTTPSCertificatePEM,
 			HTTPSKey:                 HTTPSPrivateKeyPEM,

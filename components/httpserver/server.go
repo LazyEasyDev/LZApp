@@ -69,6 +69,9 @@ func Init(httpConfig *config.HTTPConfig) (*Server, error) {
 
 	router := chi.NewRouter()
 	huma.NewError = newError
+	huma.GenerateSummary = func(_ string, path string, _ any) string {
+		return path
+	}
 	apiConfig := huma.DefaultConfig("LZApp API", "1.0.0")
 	apiConfig.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
 		"bearerAuth": {
@@ -79,15 +82,7 @@ func Init(httpConfig *config.HTTPConfig) (*Server, error) {
 	apiConfig.Security = []map[string][]string{{"bearerAuth": {}}, {}}
 	apiConfig.CreateHooks = nil
 	apiConfig.SchemasPath = ""
-	apiConfig.DocsRenderer = huma.DocsRendererScalar
-	apiConfig.DocsRendererConfig = map[string]any{
-		"hideClientButton":   true,
-		"agent":              map[string]any{"disabled": true},
-		"showDeveloperTools": "never",
-		"telemetry":          false,
-		"theme":              "saturn",
-		"darkMode":           true,
-	}
+	apiConfig.DocsPath = ""
 	api := humachi.New(router, apiConfig)
 
 	server := &Server{
