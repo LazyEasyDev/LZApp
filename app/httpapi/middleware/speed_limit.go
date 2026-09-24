@@ -1,4 +1,4 @@
-package httpapi
+package middleware
 
 import (
 	"net/http"
@@ -7,12 +7,11 @@ import (
 	"time"
 
 	cachelib "github.com/LazyEasyDev/LCache"
-	"github.com/LazyEasyDev/LZApp/app/httpapi/middleware"
 	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/danielgtaylor/huma/v2"
 )
 
-type speedLimitPolicy struct {
+type SpeedLimitPolicy struct {
 	Requests uint64
 	Window   time.Duration
 }
@@ -21,11 +20,11 @@ type requestCounter struct {
 	count atomic.Uint64
 }
 
-func withSpeedLimit(api huma.API, policy speedLimitPolicy) func(*huma.Operation) {
+func WithSpeedLimit(api huma.API, policy SpeedLimitPolicy) func(*huma.Operation) {
 	return withSpeedLimitCache(api, components.GetComponents().LCache, policy)
 }
 
-func withSpeedLimitCache(api huma.API, cache *cachelib.Cache, policy speedLimitPolicy) func(*huma.Operation) {
+func withSpeedLimitCache(api huma.API, cache *cachelib.Cache, policy SpeedLimitPolicy) func(*huma.Operation) {
 	if policy.Requests == 0 || policy.Window <= 0 || policy.Window%time.Second != 0 {
 		panic("speed limit requires a positive request count and a positive whole-second window")
 	}
@@ -34,7 +33,7 @@ func withSpeedLimitCache(api huma.API, cache *cachelib.Cache, policy speedLimitP
 	return func(operation *huma.Operation) {
 		route := operation.Method + " " + operation.Path
 		operation.Middlewares = append(operation.Middlewares, func(ctx huma.Context, next func(huma.Context)) {
-			retryAfterSeconds, err := consumeRequest(cache, route, middleware.GetClientIP(ctx.Context()), policy.Requests, windowSeconds)
+			retryAfterSeconds, err := consumeRequest(cache, route, GetClientIP(ctx.Context()), policy.Requests, windowSeconds)
 			if err != nil {
 				_ = huma.WriteErr(api, ctx, http.StatusInternalServerError, "request limiter unavailable")
 				return

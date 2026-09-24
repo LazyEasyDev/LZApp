@@ -70,6 +70,13 @@ func Init(httpConfig *config.HTTPConfig) (*Server, error) {
 	router := chi.NewRouter()
 	huma.NewError = newError
 	apiConfig := huma.DefaultConfig("LZApp API", "1.0.0")
+	apiConfig.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
+		"bearerAuth": {
+			Type:   "http",
+			Scheme: "bearer",
+		},
+	}
+	apiConfig.Security = []map[string][]string{{"bearerAuth": {}}, {}}
 	apiConfig.CreateHooks = nil
 	apiConfig.SchemasPath = ""
 	apiConfig.DocsRenderer = huma.DocsRendererScalar

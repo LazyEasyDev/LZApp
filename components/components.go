@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 
 	easyroutinelib "github.com/LazyEasyDev/EasyRoutine"
 	cachelib "github.com/LazyEasyDev/LCache"
@@ -15,14 +16,16 @@ import (
 	"github.com/LazyEasyDev/LZApp/components/gormdb"
 	"github.com/LazyEasyDev/LZApp/components/httpserver"
 	"github.com/LazyEasyDev/LZApp/components/lcache"
+	"github.com/LazyEasyDev/LZApp/components/security"
 	"github.com/LazyEasyDev/LZApp/config"
 	"gorm.io/gorm"
 )
 
 type Runtime struct {
-	DB     *gorm.DB
-	LCache *cachelib.Cache
-	HTTP   *httpserver.Server
+	DB       *gorm.DB
+	LCache   *cachelib.Cache
+	HTTP     *httpserver.Server
+	Security *security.HMACTokenSigner
 }
 
 var runtime Runtime
@@ -83,11 +86,31 @@ func CloseHttpServer() error {
 }
 
 func Init(ctx context.Context, appConfig *config.AppConfig) error {
+	if appConfig == nil {
+		return fmt.Errorf("application configuration is required")
+	}
 
 	// Initialize the logging system
 	if err := easylog.Init(appConfig.Log); err != nil {
 		slog.Error("failed to initialize logging:" + err.Error())
 		return fmt.Errorf("initialize logging: %w", err)
+	}
+
+	// Initialize the security component
+	if appConfig.Security == nil {
+		return fmt.Errorf("initialize security: security configuration is required")
+	}
+	signer, err := security.NewHMACTokenSigner([]byte(appConfig.Security.HMACKey), security.HMACTokenOptions{
+		PayloadBytes:   appConfig.Security.HMACTokenBytes,
+		SignatureBytes: appConfig.Security.HMACTokenBytes,
+	})
+	if err != nil {
+		slog.Error("failed to initialize security:" + err.Error())
+		return fmt.Errorf("initialize security: %w", err)
+	}
+	runtime.Security = signer
+	if strings.TrimSpace(appConfig.Security.HMACKey) == "" {
+		slog.Warn("HMAC key is empty; using a temporary signing key, tokens will be invalid after restart")
 	}
 
 	slog.Info("----------initialize components..................-------------")

@@ -20,6 +20,11 @@ type LocalCacheConfig struct {
 	MaxTTLSeconds int64 `json:"max_ttl_seconds"`
 }
 
+type SecurityConfig struct {
+	HMACKey        string `json:"-"`
+	HMACTokenBytes int    `json:"hmac_token_bytes"` // 16|24|32
+}
+
 ////below are optional///////
 
 type DBConfig struct {
@@ -54,6 +59,7 @@ type AppConfig struct {
 	DB          *DBConfig          `json:"database"`
 	Log         *LogConfig         `json:"log"`
 	Cache       *LocalCacheConfig  `json:"cache"`
+	Security    *SecurityConfig    `json:"security"`
 	EasyRoutine *EasyRoutineConfig `json:"easy_routine"`
 }
 
@@ -68,6 +74,10 @@ func newDefaultConfig() AppConfig {
 		},
 		Cache: &LocalCacheConfig{
 			MaxTTLSeconds: 24 * 60 * 60,
+		},
+		Security: &SecurityConfig{
+			HMACKey:        "",
+			HMACTokenBytes: 32,
 		},
 		////optional
 		HTTP: &HTTPConfig{
