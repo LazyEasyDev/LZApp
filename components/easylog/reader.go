@@ -15,8 +15,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/icza/backscanner"
 )
 
 const (
@@ -25,6 +23,8 @@ const (
 )
 
 var logFilePattern = regexp.MustCompile(`^(debug|info|warn|err)_(\d{8})_([0-9]+)\.jsonl$`)
+
+var errLogRecordTooLong = errors.New("log record exceeds maximum size")
 
 type ReadOptions struct {
 	Directory         string
@@ -142,22 +142,16 @@ func readLogFile(filePath string, limit int) ([]storedRecord, error) {
 	if err != nil {
 		return nil, fmt.Errorf("stat log file %q: %w", fileName, err)
 	}
-	scanner := backscanner.NewOptions(file, int(info.Size()), &backscanner.Options{
-		ChunkSize:     logReadChunkBytes,
-		MaxBufferSize: maxLogRecordBytes + logReadChunkBytes + 2,
-	})
+	reader := reverseLogReader{source: file, offset: info.Size()}
 	var records []storedRecord
 	firstLine := true
 	for len(records) < limit {
-		data, position, err := scanner.LineBytes()
+		data, position, err := reader.line()
 		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("read log file %q: %w", fileName, err)
-		}
-		if len(data) > maxLogRecordBytes {
-			return nil, fmt.Errorf("read log file %q at byte %d: %w", fileName, position, backscanner.ErrLongLine)
+			return nil, fmt.Errorf("read log file %q at byte %d: %w", fileName, position, err)
 		}
 		trailingFragment := firstLine
 		firstLine = false
@@ -183,6 +177,62 @@ func readLogFile(filePath string, limit int) ([]storedRecord, error) {
 		records = append(records, storedRecord{time: metadata.Time, data: bytes.Clone(data)})
 	}
 	return records, nil
+}
+
+type reverseLogReader struct {
+	source io.ReaderAt
+	offset int64
+	buffer []byte
+}
+
+func (reader *reverseLogReader) line() ([]byte, int64, error) {
+	var parts [][]byte
+	var size int
+	var position int64
+	for {
+		if len(reader.buffer) == 0 {
+			if reader.offset == 0 {
+				if size == 0 {
+					return nil, 0, io.EOF
+				}
+				break
+			}
+			chunkSize := min(int64(logReadChunkBytes), reader.offset)
+			reader.offset -= chunkSize
+			reader.buffer = make([]byte, int(chunkSize))
+			if _, err := reader.source.ReadAt(reader.buffer, reader.offset); err != nil {
+				if errors.Is(err, io.EOF) {
+					err = io.ErrUnexpectedEOF
+				}
+				return nil, reader.offset, err
+			}
+		}
+
+		newline := bytes.LastIndexByte(reader.buffer, '\n')
+		part := reader.buffer[newline+1:]
+		position = reader.offset + int64(newline+1)
+		size += len(part)
+		if size > maxLogRecordBytes+1 {
+			return nil, position, errLogRecordTooLong
+		}
+		parts = append(parts, part)
+		if newline >= 0 {
+			reader.buffer = reader.buffer[:newline]
+			break
+		}
+		reader.buffer = nil
+	}
+
+	data := make([]byte, size)
+	for _, part := range parts {
+		size -= len(part)
+		copy(data[size:], part)
+	}
+	data = bytes.TrimSuffix(data, []byte{'\r'})
+	if len(data) > maxLogRecordBytes {
+		return nil, position, errLogRecordTooLong
+	}
+	return data, position, nil
 }
 
 func levelPrefix(level string) (string, error) {
