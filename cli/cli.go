@@ -77,7 +77,7 @@ func Run(ctx context.Context, args []string) error {
 				Commands: []*urfavecli.Command{
 					{
 						Name:  "init",
-						Usage: "create tables and initialize data",
+						Usage: "create the database if missing, create tables, and initialize data",
 						Action: func(ctx context.Context, _ *urfavecli.Command) error {
 							return db.Run(ctx)
 						},

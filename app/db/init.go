@@ -8,6 +8,7 @@ import (
 
 	"github.com/LazyEasyDev/LZApp/app/users"
 	"github.com/LazyEasyDev/LZApp/components"
+	"github.com/LazyEasyDev/LZApp/components/gormdb"
 	"github.com/LazyEasyDev/LZApp/config"
 )
 
@@ -15,6 +16,9 @@ func Run(ctx context.Context) (runErr error) {
 	appConfig := config.GetConfig()
 	if appConfig == nil || appConfig.DB == nil || !appConfig.DB.Enabled {
 		return fmt.Errorf("database is disabled or not configured")
+	}
+	if err := gormdb.EnsureDatabase(ctx, appConfig.DB); err != nil {
+		return err
 	}
 	// Initialize the database component
 	init_err := components.InitDB(ctx, appConfig)
@@ -28,6 +32,7 @@ func Run(ctx context.Context) (runErr error) {
 	}()
 
 	// Set up the necessary tables and initial data.
+	slog.Info("creating tables in the database")
 	return createTables(ctx)
 }
 
