@@ -14,7 +14,7 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
-func Init(ctx context.Context, appConfig *config.AppConfig) (*gorm.DB, error) {
+func New(ctx context.Context, appConfig *config.AppConfig) (*gorm.DB, error) {
 	logMode := gormlogger.Warn
 	if appConfig.Profile == config.ProfileDebug {
 		logMode = gormlogger.Info

@@ -37,7 +37,7 @@ func (writeError errorWriter) Write(message []byte) (int, error) {
 	return len(message), nil
 }
 
-func Init(httpConfig *config.HTTPConfig) (*Server, error) {
+func New(httpConfig *config.HTTPConfig) (*Server, error) {
 	if httpConfig == nil {
 		return nil, fmt.Errorf("HTTP configuration is required")
 	}

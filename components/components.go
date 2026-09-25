@@ -23,6 +23,7 @@ import (
 
 type Runtime struct {
 	DB       *gorm.DB
+	DBKV     *dbkv.DBKV
 	HTTP     *httpserver.Server
 	Security *security.HMACTokenSigner
 }
@@ -45,7 +46,7 @@ func GetDB() *gorm.DB {
 
 func InitDB(ctx context.Context, appConfig *config.AppConfig) error {
 	slog.Info("initialize database...")
-	db, err := gormdb.Init(ctx, appConfig)
+	db, err := gormdb.New(ctx, appConfig)
 	if err != nil {
 		return fmt.Errorf("initialize database: %w", err)
 	}
@@ -67,9 +68,51 @@ func CloseDB() error {
 	return nil
 }
 
-func InitHttpServer(appConfig *config.AppConfig) (*httpserver.Server, error) {
+func InitDBKV(ctx context.Context, appConfig *config.AppConfig) error {
+	slog.Info("initialize dbkv ...")
+	store, err := dbkv.New(ctx, runtime.DB)
+	if err != nil {
+		return fmt.Errorf("initialize dbkv: %w", err)
+	}
+	runtime.DBKV = store
+	slog.Info("dbkv initialized")
+	return nil
+}
+
+func CloseDBKV() {
+	if runtime.DBKV != nil {
+		slog.Info("closing dbkv ...")
+		runtime.DBKV.Close()
+		slog.Info("dbkv closed")
+	}
+}
+
+func InitSecurity(appConfig *config.AppConfig) (*security.HMACTokenSigner, error) {
+
+	signer, err := security.NewHMACTokenSigner([]byte(appConfig.Security.HMACKey), security.HMACTokenOptions{
+		PayloadBytes:   appConfig.Security.HMACTokenBytes,
+		SignatureBytes: appConfig.Security.HMACTokenBytes,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("initialize security: %w", err)
+	}
+	runtime.Security = signer
+	if strings.TrimSpace(appConfig.Security.HMACKey) == "" {
+		slog.Warn("HMAC key is empty; using a temporary signing key, tokens will be invalid after restart")
+	}
+
+	return signer, nil
+}
+
+func InitHttpServer(appConfig *config.AppConfig) error {
 	slog.Info("initialize httpserver...")
-	return httpserver.Init(appConfig.HTTP)
+	srv, err := httpserver.New(appConfig.HTTP)
+	if err != nil {
+		return fmt.Errorf("initialize HTTP server: %w", err)
+	}
+	runtime.HTTP = srv
+	slog.Info("httpserver initialized")
+	return nil
 }
 
 func CloseHttpServer() error {
@@ -86,65 +129,51 @@ func CloseHttpServer() error {
 }
 
 func Init(ctx context.Context, appConfig *config.AppConfig) error {
+
+	slog.Info("----------initialize components..................-------------")
+	// Check if the application configuration is provided
 	if appConfig == nil {
+		slog.Error("application configuration is required")
 		return fmt.Errorf("application configuration is required")
 	}
-
 	// Initialize the logging system
 	if err := easylog.Init(appConfig.Log); err != nil {
 		slog.Error("failed to initialize logging:" + err.Error())
 		return fmt.Errorf("initialize logging: %w", err)
 	}
-
 	// Initialize the security component
-	if appConfig.Security == nil {
-		return fmt.Errorf("initialize security: security configuration is required")
-	}
-	signer, err := security.NewHMACTokenSigner([]byte(appConfig.Security.HMACKey), security.HMACTokenOptions{
-		PayloadBytes:   appConfig.Security.HMACTokenBytes,
-		SignatureBytes: appConfig.Security.HMACTokenBytes,
-	})
-	if err != nil {
+	if signer, err := InitSecurity(appConfig); err != nil {
 		slog.Error("failed to initialize security:" + err.Error())
 		return fmt.Errorf("initialize security: %w", err)
-	}
-	runtime.Security = signer
-	if strings.TrimSpace(appConfig.Security.HMACKey) == "" {
-		slog.Warn("HMAC key is empty; using a temporary signing key, tokens will be invalid after restart")
+	} else {
+		runtime.Security = signer
 	}
 
-	slog.Info("----------initialize components..................-------------")
 	// Initialize the local cache
 	lcache.Init(appConfig.Cache)
 
+	// Initialize the database component
 	if err := InitDB(ctx, appConfig); err != nil {
-		return err
-	} else {
-		// Initialize the routine coordinator if enabled
-		if runtime.DB != nil {
-			// initialize the routine coordinator
-			slog.Info("initialize easyroutine ...")
-			if err := easyroutine.Init(ctx, runtime.DB); err != nil {
-				slog.Error("failed to initialize routine coordinator:" + err.Error())
-				return fmt.Errorf("initialize routine coordinator: %w", err)
-			}
-			slog.Info("easyroutine initialized")
-
-			// Initialize the dbkv component if enabled
-			slog.Info("initialize dbkv ...")
-			if err := dbkv.Init(ctx, runtime.DB); err != nil {
-				slog.Error("failed to initialize dbkv:" + err.Error())
-				return fmt.Errorf("initialize dbkv: %w", err)
-			}
-			slog.Info("dbkv initialized")
-		}
+		slog.Error("failed to initialize database:" + err.Error())
+		return fmt.Errorf("initialize database: %w", err)
 	}
+
+	// initialize the routine coordinator
+	if err := easyroutine.Init(ctx, runtime.DB); err != nil {
+		slog.Error("failed to initialize routine coordinator:" + err.Error())
+		return fmt.Errorf("initialize routine coordinator: %w", err)
+	}
+
+	// Initialize the dbkv component
+	if err := InitDBKV(ctx, appConfig); err != nil {
+		slog.Error("failed to initialize dbkv:" + err.Error())
+		return fmt.Errorf("initialize dbkv: %w", err)
+	}
+
 	// Initialize the HTTP server if enabled
-	if server, err := InitHttpServer(appConfig); err != nil {
+	if err := InitHttpServer(appConfig); err != nil {
+		slog.Error("failed to initialize HTTP server:" + err.Error())
 		return fmt.Errorf("initialize HTTP server: %w", err)
-	} else {
-		runtime.HTTP = server
-		slog.Info("Http server initialized", "https_port", appConfig.HTTP.HTTPSPort)
 	}
 
 	// All components initialized successfully
@@ -162,17 +191,12 @@ func closeComponents() error {
 	if err := CloseHttpServer(); err != nil {
 		errs = append(errs, err)
 	}
-
 	// Close the dbkv component if it was initialized
-	slog.Info("closing dbkv...")
-	dbkv.Close()
-	slog.Info("dbkv closed")
-
+	runtime.DBKV.Close()
 	// Close the database if it was initialized
 	if err := CloseDB(); err != nil {
 		errs = append(errs, err)
 	}
-
 	// Return any errors that occurred during the closing of components
 	if len(errs) > 0 {
 		combinedErr := errors.Join(errs...)

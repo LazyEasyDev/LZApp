@@ -9,7 +9,6 @@ import (
 	"github.com/LazyEasyDev/EasyRoutine"
 	"github.com/LazyEasyDev/LZApp/app/core/httpapi"
 	"github.com/LazyEasyDev/LZApp/components"
-	"github.com/LazyEasyDev/LZApp/components/dbkv"
 	"github.com/LazyEasyDev/LZApp/config"
 )
 
@@ -21,7 +20,6 @@ func Run(ctx context.Context) (runErr error) {
 			cancelAll(runErr)
 		}
 		cleanupErr := components.WaitAndClose()
-		dbkv.Close()
 		cause := context.Cause(ctx)
 		if errors.Is(cause, context.Canceled) || errors.Is(cause, runErr) {
 			cause = nil
