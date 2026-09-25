@@ -8,9 +8,9 @@ import (
 	"os"
 	"strings"
 
-	easyroutinelib "github.com/LazyEasyDev/EasyRoutine"
-	cachelib "github.com/LazyEasyDev/LCache"
+	"github.com/LazyEasyDev/EasyRoutine"
 
+	"github.com/LazyEasyDev/LZApp/components/dbkv"
 	"github.com/LazyEasyDev/LZApp/components/easylog"
 	"github.com/LazyEasyDev/LZApp/components/easyroutine"
 	"github.com/LazyEasyDev/LZApp/components/gormdb"
@@ -23,15 +23,18 @@ import (
 
 type Runtime struct {
 	DB       *gorm.DB
-	LCache   *cachelib.Cache
 	HTTP     *httpserver.Server
 	Security *security.HMACTokenSigner
 }
 
 var runtime Runtime
 
-func GetComponents() Runtime {
-	return runtime
+func GetComponents() *Runtime {
+	return &runtime
+}
+
+func GetDB() *gorm.DB {
+	return runtime.DB
 }
 
 /*
@@ -41,39 +44,36 @@ func GetComponents() Runtime {
 */
 
 func InitDB(ctx context.Context, appConfig *config.AppConfig) error {
-	if !appConfig.DB.Enabled {
-		return nil
-	}
 	slog.Info("initialize database...")
 	db, err := gormdb.Init(ctx, appConfig)
 	if err != nil {
 		return fmt.Errorf("initialize database: %w", err)
 	}
 	runtime.DB = db
+	slog.Info("database initialized")
 	return nil
 }
 
 func CloseDB() error {
+	slog.Info("closing database...")
 	if runtime.DB != nil {
 		err := gormdb.Close(runtime.DB)
 		if err != nil {
 			slog.Error("failed to close database:" + err.Error())
 			return fmt.Errorf("close database: %w", err)
 		}
-		slog.Info("DB closed")
+		slog.Info("database closed")
 	}
 	return nil
 }
 
 func InitHttpServer(appConfig *config.AppConfig) (*httpserver.Server, error) {
-	if !appConfig.HTTP.Enabled {
-		return nil, nil
-	}
 	slog.Info("initialize httpserver...")
 	return httpserver.Init(appConfig.HTTP)
 }
 
 func CloseHttpServer() error {
+	slog.Info("closing HTTP server...")
 	if runtime.HTTP != nil {
 		err := runtime.HTTP.Close()
 		if err != nil {
@@ -115,17 +115,28 @@ func Init(ctx context.Context, appConfig *config.AppConfig) error {
 
 	slog.Info("----------initialize components..................-------------")
 	// Initialize the local cache
-	runtime.LCache = lcache.Init(appConfig.Cache)
+	lcache.Init(appConfig.Cache)
 
 	if err := InitDB(ctx, appConfig); err != nil {
 		return err
 	} else {
 		// Initialize the routine coordinator if enabled
-		if runtime.DB != nil && appConfig.EasyRoutine.Enabled {
+		if runtime.DB != nil {
+			// initialize the routine coordinator
+			slog.Info("initialize easyroutine ...")
 			if err := easyroutine.Init(ctx, runtime.DB); err != nil {
 				slog.Error("failed to initialize routine coordinator:" + err.Error())
 				return fmt.Errorf("initialize routine coordinator: %w", err)
 			}
+			slog.Info("easyroutine initialized")
+
+			// Initialize the dbkv component if enabled
+			slog.Info("initialize dbkv ...")
+			if err := dbkv.Init(ctx, runtime.DB); err != nil {
+				slog.Error("failed to initialize dbkv:" + err.Error())
+				return fmt.Errorf("initialize dbkv: %w", err)
+			}
+			slog.Info("dbkv initialized")
 		}
 	}
 	// Initialize the HTTP server if enabled
@@ -152,11 +163,17 @@ func closeComponents() error {
 		errs = append(errs, err)
 	}
 
+	// Close the dbkv component if it was initialized
+	slog.Info("closing dbkv...")
+	dbkv.Close()
+	slog.Info("dbkv closed")
+
 	// Close the database if it was initialized
 	if err := CloseDB(); err != nil {
 		errs = append(errs, err)
 	}
 
+	// Return any errors that occurred during the closing of components
 	if len(errs) > 0 {
 		combinedErr := errors.Join(errs...)
 		slog.Error("errors occurred while closing components: " + combinedErr.Error())
@@ -176,14 +193,14 @@ func WaitAndClose() (closeErr error) {
 	slog.Info("--------------------------------------------------------------")
 	//wait for all routines to complete
 	defer func() {
-		if runtime.LCache != nil {
-			runtime.LCache.Close()
-		}
+		// Close the local cache component first
+		lcache.Close()
+		// Close the local cache component
 		if err := easylog.Close(); err != nil {
 			closeErr = errors.Join(closeErr, fmt.Errorf("close logging: %w", err))
 		}
 	}()
 
-	easyroutinelib.Wait()
+	EasyRoutine.Wait()
 	return closeComponents()
 }

@@ -28,7 +28,6 @@ type SecurityConfig struct {
 ////below are optional///////
 
 type DBConfig struct {
-	Enabled  bool   `json:"enabled"`
 	Host     string `json:"host"`
 	Port     int    `json:"port"`
 	User     string `json:"user"`
@@ -38,7 +37,6 @@ type DBConfig struct {
 }
 
 type HTTPConfig struct {
-	Enabled                  bool   `json:"enabled"`
 	APITokenCookieName       string `json:"api_token_cookie_name"`
 	HTTPSPort                int    `json:"https_port"`
 	HTTPSCertificate         string `json:"https_certificate"`
@@ -50,18 +48,13 @@ type HTTPConfig struct {
 	ShutdownTimeoutSeconds   int    `json:"shutdown_timeout_seconds"`
 }
 
-type EasyRoutineConfig struct {
-	Enabled bool `json:"enabled"`
-}
-
 type AppConfig struct {
-	Profile     Profile            `json:"profile"`
-	HTTP        *HTTPConfig        `json:"http"`
-	DB          *DBConfig          `json:"database"`
-	Log         *LogConfig         `json:"log"`
-	Cache       *LocalCacheConfig  `json:"cache"`
-	Security    *SecurityConfig    `json:"security"`
-	EasyRoutine *EasyRoutineConfig `json:"easy_routine"`
+	Profile  Profile           `json:"profile"`
+	HTTP     *HTTPConfig       `json:"http"`
+	DB       *DBConfig         `json:"database"`
+	Log      *LogConfig        `json:"log"`
+	Cache    *LocalCacheConfig `json:"cache"`
+	Security *SecurityConfig   `json:"security"`
 }
 
 func newDefaultConfig() AppConfig {
@@ -82,7 +75,6 @@ func newDefaultConfig() AppConfig {
 		},
 		////optional
 		HTTP: &HTTPConfig{
-			Enabled:                  false,
 			APITokenCookieName:       "api_token",
 			HTTPSPort:                8443,
 			HTTPSCertificate:         HTTPSCertificatePEM,
@@ -94,12 +86,8 @@ func newDefaultConfig() AppConfig {
 			ShutdownTimeoutSeconds:   60,
 		},
 		DB: &DBConfig{
-			Enabled: false,
-			Host:    "127.0.0.1",
-			Port:    3306,
-		},
-		EasyRoutine: &EasyRoutineConfig{
-			Enabled: true,
+			Host: "127.0.0.1",
+			Port: 3306,
 		},
 	}
 }

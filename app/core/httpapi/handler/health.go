@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/LazyEasyDev/LZApp/app/httpapi/middleware"
+	"github.com/LazyEasyDev/LZApp/app/core/httpapi/middleware"
 )
 
 type HealthOutput struct {

@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/LazyEasyDev/LZApp/app/httpapi/handler"
-	"github.com/LazyEasyDev/LZApp/app/httpapi/handler/docs"
-	"github.com/LazyEasyDev/LZApp/app/httpapi/middleware"
+	"github.com/LazyEasyDev/LZApp/app/core/httpapi/handler"
+	"github.com/LazyEasyDev/LZApp/app/core/httpapi/handler/docs"
+	"github.com/LazyEasyDev/LZApp/app/core/httpapi/middleware"
 	huma "github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 )

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/LazyEasyDev/LZApp/app/users"
+	"github.com/LazyEasyDev/LZApp/app/core/users"
 	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/LazyEasyDev/LZApp/components/gormdb"
 	"github.com/LazyEasyDev/LZApp/config"
@@ -14,7 +14,7 @@ import (
 
 func Run(ctx context.Context) (runErr error) {
 	appConfig := config.GetConfig()
-	if appConfig == nil || appConfig.DB == nil || !appConfig.DB.Enabled {
+	if appConfig == nil || appConfig.DB == nil {
 		return fmt.Errorf("database is disabled or not configured")
 	}
 	if err := gormdb.EnsureDatabase(ctx, appConfig.DB); err != nil {
@@ -37,17 +37,15 @@ func Run(ctx context.Context) (runErr error) {
 }
 
 func createTables(ctx context.Context) error {
-	// Get the database instance from the components runtime
-	database := components.GetComponents().DB
 	// Create the tables
-	if err := users.CreateTable(ctx, database); err != nil {
+	if err := users.CreateTable(ctx); err != nil {
 		return fmt.Errorf("create user table: %w", err)
 	}
 	// Create the data
-	if err := users.InitData(ctx, database); err != nil {
+	if err := users.InitData(ctx); err != nil {
 		return fmt.Errorf("initialize user data: %w", err)
 	}
 	//
-	slog.Info("user table initialized successfully")
+	slog.Info("database tables initialized successfully")
 	return nil
 }

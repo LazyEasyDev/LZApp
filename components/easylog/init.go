@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	easyloglib "github.com/LazyEasyDev/EasyLog"
+	"github.com/LazyEasyDev/EasyLog"
 	"github.com/LazyEasyDev/LZApp/config"
 )
 
@@ -25,22 +25,22 @@ func Init(logConfig *config.LogConfig) error {
 		return err
 	}
 
-	options := easyloglib.InitOptions{
-		Runtime: easyloglib.Options{
+	options := EasyLog.InitOptions{
+		Runtime: EasyLog.Options{
 			Level:     level,
 			AddSource: logConfig.AddSource,
 		},
-		File: &easyloglib.FileOptions{BaseDirectory: directory},
+		File: &EasyLog.FileOptions{BaseDirectory: directory},
 	}
 	if logConfig.ToTerminal {
-		options.Terminal = &easyloglib.TerminalOptions{Writer: os.Stderr}
+		options.Terminal = &EasyLog.TerminalOptions{Writer: os.Stderr}
 	}
 
-	return easyloglib.Init(options)
+	return EasyLog.Init(options)
 }
 
 func Close() error {
-	return easyloglib.Close()
+	return EasyLog.Close()
 }
 
 func ResolveDirectory(directory, relativeTo string) (string, error) {

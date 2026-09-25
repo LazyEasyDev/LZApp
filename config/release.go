@@ -9,14 +9,12 @@ var releaseAppConfig = func() AppConfig {
 	appConfig.Log.AddSource = false
 
 	// Database configuration for release environment
-	appConfig.DB.Enabled = true
 	appConfig.DB.DBName = "lzapp_release"
 	appConfig.DB.User = "lzapp"
 	appConfig.DB.Password = "lzapp-release-password"
 	appConfig.DB.Charset = "utf8mb4"
 
 	// HTTP configuration for release environment
-	appConfig.HTTP.Enabled = true
 	appConfig.HTTP.HTTPSPort = 443
 
 	//remove below in released version ,they are here just for convinence

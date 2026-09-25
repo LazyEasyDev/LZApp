@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/LazyEasyDev/LZApp/app"
-	"github.com/LazyEasyDev/LZApp/app/db"
+	"github.com/LazyEasyDev/LZApp/app/core/db"
 	"github.com/LazyEasyDev/LZApp/components/easylog"
 	"github.com/LazyEasyDev/LZApp/config"
 	urfavecli "github.com/urfave/cli/v3"

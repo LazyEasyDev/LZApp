@@ -44,6 +44,7 @@ func Init(ctx context.Context, appConfig *config.AppConfig) (*gorm.DB, error) {
 }
 
 func Close(database *gorm.DB) error {
+
 	if database == nil {
 		return nil
 	}
