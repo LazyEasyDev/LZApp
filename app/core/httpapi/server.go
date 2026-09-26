@@ -9,14 +9,14 @@ import (
 )
 
 func Start(ctx context.Context) error {
-	runtime := components.GetComponents()
-	if runtime.HTTP == nil {
+	http_server := components.GetHTTP()
+	if http_server == nil {
 		return fmt.Errorf("HTTP server is disabled or not initialized")
 	}
 	// register the HTTP routes
 	slog.Info("Registering HTTP routes")
-	registerRoutes(runtime.HTTP.API())
+	registerRoutes(http_server.API())
 	// start the HTTP service
-	slog.Info("Starting HTTPS service")
-	return runtime.HTTP.Start(ctx)
+	slog.Info("Starting HTTP service")
+	return http_server.Start(ctx)
 }

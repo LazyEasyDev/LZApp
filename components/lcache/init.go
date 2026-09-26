@@ -2,10 +2,10 @@ package lcache
 
 import (
 	"github.com/LazyEasyDev/LCache"
-	"github.com/LazyEasyDev/LZApp/config"
+	"github.com/LazyEasyDev/LZApp/config/lcache_config"
 )
 
-func Init(cacheConfig *config.LocalCacheConfig) {
+func Init(cacheConfig *lcache_config.LocalCacheConfig) {
 	LCache.Init(LCache.Config{MaxTTLSeconds: cacheConfig.MaxTTLSeconds})
 }
 

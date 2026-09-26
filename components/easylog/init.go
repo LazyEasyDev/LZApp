@@ -8,10 +8,10 @@ import (
 	"strings"
 
 	"github.com/LazyEasyDev/EasyLog"
-	"github.com/LazyEasyDev/LZApp/config"
+	"github.com/LazyEasyDev/LZApp/config/log_config"
 )
 
-func Init(logConfig *config.LogConfig) error {
+func Init(logConfig *log_config.LogConfig) error {
 	if logConfig == nil {
 		return fmt.Errorf("log configuration is required")
 	}

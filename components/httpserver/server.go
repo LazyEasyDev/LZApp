@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LazyEasyDev/LZApp/config"
+	"github.com/LazyEasyDev/LZApp/config/http_config"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
@@ -37,7 +37,7 @@ func (writeError errorWriter) Write(message []byte) (int, error) {
 	return len(message), nil
 }
 
-func New(httpConfig *config.HTTPConfig) (*Server, error) {
+func New(httpConfig *http_config.HTTPConfig) (*Server, error) {
 	if httpConfig == nil {
 		return nil, fmt.Errorf("HTTP configuration is required")
 	}
@@ -166,7 +166,7 @@ func serveError(err error) error {
 	return fmt.Errorf("serve HTTPS: %w", err)
 }
 
-func httpsCertificate(httpConfig *config.HTTPConfig) (tls.Certificate, error) {
+func httpsCertificate(httpConfig *http_config.HTTPConfig) (tls.Certificate, error) {
 	certificatePEM := strings.TrimSpace(httpConfig.HTTPSCertificate)
 	keyPEM := strings.TrimSpace(httpConfig.HTTPSKey)
 

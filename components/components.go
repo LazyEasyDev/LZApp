@@ -16,6 +16,7 @@ import (
 	"github.com/LazyEasyDev/LZApp/components/gormdb"
 	"github.com/LazyEasyDev/LZApp/components/httpserver"
 	"github.com/LazyEasyDev/LZApp/components/lcache"
+	rediscomponent "github.com/LazyEasyDev/LZApp/components/redis"
 	"github.com/LazyEasyDev/LZApp/components/security"
 	"github.com/LazyEasyDev/LZApp/config"
 	"gorm.io/gorm"
@@ -24,18 +25,35 @@ import (
 type Runtime struct {
 	DB       *gorm.DB
 	DBKV     *dbkv.DBKV
+	Redis    *rediscomponent.Client
 	HTTP     *httpserver.Server
 	Security *security.HMACTokenSigner
 }
 
 var runtime Runtime
 
-func GetComponents() *Runtime {
-	return &runtime
-}
+// func GetComponents() *Runtime {
+// 	return &runtime
+// }
 
 func GetDB() *gorm.DB {
 	return runtime.DB
+}
+
+func GetRedis() *rediscomponent.Client {
+	return runtime.Redis
+}
+
+func GetHTTP() *httpserver.Server {
+	return runtime.HTTP
+}
+
+func GetSecurity() *security.HMACTokenSigner {
+	return runtime.Security
+}
+
+func GetDBKV() *dbkv.DBKV {
+	return runtime.DBKV
 }
 
 /*
@@ -85,6 +103,34 @@ func CloseDBKV() {
 		runtime.DBKV.Close()
 		slog.Info("dbkv closed")
 	}
+}
+
+func InitRedis(ctx context.Context, appConfig *config.AppConfig) error {
+	if appConfig.Redis == nil {
+		return nil
+	}
+	slog.Info("initialize Redis...")
+	client, err := rediscomponent.New(ctx, appConfig.Redis)
+	if err != nil {
+		return fmt.Errorf("initialize Redis: %w", err)
+	}
+	runtime.Redis = client
+	slog.Info("Redis initialized")
+	return nil
+}
+
+func CloseRedis() error {
+	if runtime.Redis == nil {
+		return nil
+	}
+	slog.Info("closing Redis...")
+	err := runtime.Redis.Close()
+	runtime.Redis = nil
+	if err != nil {
+		return fmt.Errorf("close Redis: %w", err)
+	}
+	slog.Info("Redis closed")
+	return nil
 }
 
 func InitSecurity(appConfig *config.AppConfig) (*security.HMACTokenSigner, error) {
@@ -152,6 +198,10 @@ func Init(ctx context.Context, appConfig *config.AppConfig) error {
 	// Initialize the local cache
 	lcache.Init(appConfig.Cache)
 
+	if err := InitRedis(ctx, appConfig); err != nil {
+		return err
+	}
+
 	// Initialize the database component
 	if err := InitDB(ctx, appConfig); err != nil {
 		slog.Error("failed to initialize database:" + err.Error())
@@ -192,7 +242,10 @@ func closeComponents() error {
 		errs = append(errs, err)
 	}
 	// Close the dbkv component if it was initialized
-	runtime.DBKV.Close()
+	CloseDBKV()
+	if err := CloseRedis(); err != nil {
+		errs = append(errs, err)
+	}
 	// Close the database if it was initialized
 	if err := CloseDB(); err != nil {
 		errs = append(errs, err)

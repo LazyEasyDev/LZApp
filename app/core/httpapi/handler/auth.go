@@ -26,7 +26,7 @@ func SetAuthHandler(_ context.Context, _ *struct{}) (*AuthOutput, error) {
 		return nil, huma.Error500InternalServerError("cookie is not configured")
 	}
 
-	token, err := components.GetComponents().Security.Generate()
+	token, err := components.GetSecurity().Generate()
 	if err != nil {
 		return nil, huma.Error500InternalServerError("unable to generate token")
 	}

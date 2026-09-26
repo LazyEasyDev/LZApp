@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/LazyEasyDev/LZApp/config"
+	"github.com/LazyEasyDev/LZApp/config/db_config"
 )
 
-func EnsureDatabase(ctx context.Context, dbConfig *config.DBConfig) (ensureErr error) {
+func EnsureDatabase(ctx context.Context, dbConfig *db_config.DBConfig) (ensureErr error) {
 	if dbConfig == nil || dbConfig.DBName == "" {
 		return fmt.Errorf("database name is required")
 	}
@@ -30,7 +30,7 @@ func EnsureDatabase(ctx context.Context, dbConfig *config.DBConfig) (ensureErr e
 	return ensureDatabase(ctx, database, dbConfig)
 }
 
-func ensureDatabase(ctx context.Context, database *sql.DB, dbConfig *config.DBConfig) error {
+func ensureDatabase(ctx context.Context, database *sql.DB, dbConfig *db_config.DBConfig) error {
 	var databaseName string
 	err := database.QueryRowContext(ctx,
 		"SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = ?",

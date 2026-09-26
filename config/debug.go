@@ -6,6 +6,7 @@ var debugAppConfig = func() AppConfig {
 	//
 	appConfig.Log.Level = "debug"
 	appConfig.Log.DirectoryRelative = "cwd"
+	//
 
 	return appConfig
 }()

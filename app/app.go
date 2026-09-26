@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/LazyEasyDev/EasyRoutine"
 	"github.com/LazyEasyDev/LZApp/app/core/httpapi"
@@ -56,6 +57,11 @@ func Start(ctx context.Context, cancelAll context.CancelCauseFunc) error {
 	}
 
 	// add additional services here if needed
+	redis := components.GetRedis()
+	redis.Set(ctx, "aa", "aaaaaaaabbbbb", time.Duration(60)*time.Second)
+
+	result, _ := redis.Get(ctx, "aa").Result()
+	slog.Info("Redis result", "key", "aa", "value", result)
 
 	return nil
 }

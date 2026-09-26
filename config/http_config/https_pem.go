@@ -1,3 +1,3 @@
-package config
+package http_config
 
 const HTTPSCertificatePEM = ``

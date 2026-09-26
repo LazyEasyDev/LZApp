@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/LazyEasyDev/LZApp/config"
+	"github.com/LazyEasyDev/LZApp/config/db_config"
 	mysqldriver "github.com/go-sql-driver/mysql"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -62,7 +63,7 @@ func SQLDB(database *gorm.DB) (*sql.DB, error) {
 	return database.DB()
 }
 
-func dataSourceName(dbConfig *config.DBConfig) string {
+func dataSourceName(dbConfig *db_config.DBConfig) string {
 	driverConfig := mysqldriver.NewConfig()
 	driverConfig.User = dbConfig.User
 	driverConfig.Passwd = dbConfig.Password

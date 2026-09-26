@@ -13,7 +13,7 @@ type DocsTokenView struct {
 // implment your view list here
 func DocsTokenViewHandler(api_token string) DocsTokenView {
 
-	signer := components.GetComponents().Security
+	signer := components.GetSecurity()
 
 	if signer != nil && signer.Verify(api_token) == nil {
 		return DocsTokenView{
