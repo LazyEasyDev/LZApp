@@ -1,11 +1,13 @@
 package dbkv
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -94,11 +96,13 @@ func newWithInterval(ctx context.Context, database *gorm.DB, interval time.Durat
 }
 
 func (store *DBKV) Close() {
+	slog.Info("closing dbkv store")
 	if store.refreshWorker != nil {
 		store.refreshWorker.Stop()
 		store.refreshWorker.Wait()
 	}
 	store.cache.Store(nil)
+	slog.Info("dbkv store closed")
 }
 
 func (store *DBKV) refresh(ctx context.Context) error {
@@ -234,7 +238,7 @@ func (store *DBKV) getFromDatabase(ctx context.Context, name string) (*Entry, er
 	return &entry, nil
 }
 
-func (store *DBKV) Get(ctx context.Context, name string) (*Entry, error) {
+func (store *DBKV) GetRecord(ctx context.Context, name string) (*Entry, error) {
 	name = strings.TrimSpace(name)
 	if err := validateName(name); err != nil {
 		return nil, err
@@ -252,6 +256,26 @@ func (store *DBKV) Get(ctx context.Context, name string) (*Entry, error) {
 		return nil, gorm.ErrRecordNotFound
 	}
 	return &entry, nil
+}
+
+func (store *DBKV) List(ctx context.Context) ([]Entry, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	snapshot := store.cache.Load()
+	if snapshot == nil {
+		return nil, ErrNotInitialized
+	}
+	entries := make([]Entry, 0, len(*snapshot))
+	for _, entry := range *snapshot {
+		if entry.Visible {
+			entries = append(entries, entry)
+		}
+	}
+	slices.SortFunc(entries, func(first, second Entry) int {
+		return cmp.Compare(first.ID, second.ID)
+	})
+	return entries, nil
 }
 
 func (store *DBKV) Delete(ctx context.Context, name string) error {
@@ -277,59 +301,50 @@ func (store *DBKV) Delete(ctx context.Context, name string) error {
 	})
 }
 
-type Value[ValueType any] struct {
-	Value ValueType `json:"value"`
-}
-
-type StringValue = Value[string]
-type Int64Value = Value[int64]
-type BoolValue = Value[bool]
-type Float64Value = Value[float64]
-
 func (store *DBKV) SetString(ctx context.Context, name, value string, description string) error {
-	return store.Set(ctx, name, StringValue{Value: value}, description)
+	return store.Set(ctx, name, value, description)
 }
 
 func (store *DBKV) GetString(ctx context.Context, name string) (string, error) {
-	return getValue[string](ctx, store, name)
+	return Get[string](ctx, store, name)
 }
 
 func (store *DBKV) SetInt64(ctx context.Context, name string, value int64, description string) error {
-	return store.Set(ctx, name, Int64Value{Value: value}, description)
+	return store.Set(ctx, name, value, description)
 }
 
 func (store *DBKV) GetInt64(ctx context.Context, name string) (int64, error) {
-	return getValue[int64](ctx, store, name)
+	return Get[int64](ctx, store, name)
 }
 
 func (store *DBKV) SetBool(ctx context.Context, name string, value bool, description string) error {
-	return store.Set(ctx, name, BoolValue{Value: value}, description)
+	return store.Set(ctx, name, value, description)
 }
 
 func (store *DBKV) GetBool(ctx context.Context, name string) (bool, error) {
-	return getValue[bool](ctx, store, name)
+	return Get[bool](ctx, store, name)
 }
 
 func (store *DBKV) SetFloat64(ctx context.Context, name string, value float64, description string) error {
-	return store.Set(ctx, name, Float64Value{Value: value}, description)
+	return store.Set(ctx, name, value, description)
 }
 
 func (store *DBKV) GetFloat64(ctx context.Context, name string) (float64, error) {
-	return getValue[float64](ctx, store, name)
+	return Get[float64](ctx, store, name)
 }
 
-func getValue[ValueType any](ctx context.Context, store *DBKV, name string) (ValueType, error) {
+func Get[ValueType any](ctx context.Context, store *DBKV, name string) (ValueType, error) {
 	var zero ValueType
-	entry, err := store.Get(ctx, name)
+	entry, err := store.GetRecord(ctx, name)
 	if err != nil {
 		return zero, err
 	}
-	var decoded Value[*ValueType]
+	var decoded *ValueType
 	if err := json.Unmarshal([]byte(entry.Value), &decoded); err != nil {
 		return zero, fmt.Errorf("decode value for %q: %w", name, err)
 	}
-	if decoded.Value == nil {
-		return zero, fmt.Errorf("key %q must contain a non-null value field", name)
+	if decoded == nil {
+		return zero, fmt.Errorf("key %q must contain a non-null value", name)
 	}
-	return *decoded.Value, nil
+	return *decoded, nil
 }
