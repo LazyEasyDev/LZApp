@@ -33,9 +33,76 @@ Tokens are supplied by callers; there is no automatic token-generation hook.
 Supplied tokens are preserved, and duplicates are rejected by the database.
 The `NOT NULL` constraint does not reject an empty string.
 
-Tokens are excluded from JSON with `json:"-"` and are not changed by ordinary
-user updates or repeated initialization. Treat the stored token as a secret.
-This adds token storage only; it does not change HTTP authentication.
+Tokens are included in JSON as `api_token` and are not changed by ordinary user
+updates or repeated initialization. This adds token storage only; it does not
+change HTTP authentication.
+
+## User Lookups
+
+`GetByID`, `GetByEmail`, and `GetByApiToken` check the local cache, Redis, then
+the database. Successful lookups cache the user for 15 seconds locally and
+30 minutes in Redis.
+
+Database `gorm.ErrRecordNotFound` results, including wrapped errors, are cached
+as a nil `*User` locally for 15 seconds and JSON `null` in Redis for one minute.
+A negative cache hit returns `nil, gorm.ErrRecordNotFound`. Other database errors
+are returned without being cached.
+
+After a successful database commit, `Update` invalidates the ID, old email, new
+email, and stored API-token keys in both caches. `Delete` invalidates the ID,
+stored email, and stored API-token keys. Both read the persisted identifiers
+under a row lock rather than using cached users or the caller's API token.
+Redis keys are deleted individually so this works across cluster hash slots.
+
+Database failures leave cache entries untouched. Redis cleanup failures do not
+stop attempts to clear the remaining keys. `Update` returns an error indicating
+that the database update committed but cache cleanup failed. `Delete` logs cache
+cleanup failures and still returns success for a committed database deletion.
+
+`Create` does not invalidate negative entries, so a newly created user can remain
+missing until those entries expire. Redis hits populate the local cache for
+another 15 seconds. Invalidation does not synchronize in-flight reads or clear
+other processes' local caches; those local entries expire normally.
+
+Local-cache regression tests run with `go test ./app/core/users`. To also test
+Redis, database-result handling, and List filters using the debug configuration:
+
+```sh
+LZAPP_USER_CACHE_INTEGRATION=1 go test -count=1 ./app/core/users
+```
+
+The cache integration tests use isolated Redis keys and simulated GORM reads
+and writes. List filter tests execute real SQL against a connection-local
+temporary table. Neither modifies application user rows. `LZAPP_TEST_DB_USER`,
+`LZAPP_TEST_DB_PASSWORD`, and `LZAPP_TEST_DB_NAME` can override the test's MySQL
+settings. List tests require an existing database and permission to create
+temporary tables; they do not create a database.
+
+## Listing Users
+
+```go
+found, err := users.List(ctx, users.ListFilter{
+        Name:   "Alice",
+        Email:  "@example.com",
+        Access: `["am"]`,
+}, 100, 0)
+```
+
+Every supplied condition is combined with `AND`:
+
+- `ID`, `ApiToken`, and `Access` use SQL equality (`=`).
+- `Name` and `Email` use substring matching (`LIKE '%value%'`). Search text is
+    parameterized, and `%`, `_`, and the escape character `!` are treated literally.
+- Zero `ID` and empty strings omit their conditions. Use `ListFilter{}` for an
+    unfiltered list.
+
+`Access` matches the entire stored JSON string, not membership of a permission.
+For example, `["am"]` does not match `["am","admin"]`. Filter values are not
+normalized; string comparisons follow the database column's collation.
+
+Results remain ordered by ascending ID. Limit defaults to 100 when less than 1
+and is capped at 1000; negative offsets become 0. No matches return an empty
+result without `gorm.ErrRecordNotFound`.
 
 ## Initialization
 
