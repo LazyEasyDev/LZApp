@@ -11,6 +11,7 @@ require (
 	github.com/go-sql-driver/mysql v1.10.1
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/urfave/cli/v3 v3.12.0
+	github.com/wneessen/go-mail v0.8.1
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.31.2
 )
@@ -21,7 +22,8 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
+	golang.org/x/crypto v0.54.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/term v0.44.0 // indirect
+	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 )

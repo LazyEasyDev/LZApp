@@ -13,6 +13,7 @@ import (
 	"github.com/LazyEasyDev/LZApp/components/dbkv"
 	"github.com/LazyEasyDev/LZApp/components/easylog"
 	"github.com/LazyEasyDev/LZApp/components/easyroutine"
+	"github.com/LazyEasyDev/LZApp/components/email"
 	"github.com/LazyEasyDev/LZApp/components/gormdb"
 	"github.com/LazyEasyDev/LZApp/components/httpserver"
 	"github.com/LazyEasyDev/LZApp/components/lcache"
@@ -28,6 +29,7 @@ type Runtime struct {
 	Redis    *rediscomponent.Client
 	HTTP     *httpserver.Server
 	Security *security.HMACTokenSigner
+	Email    *email.Sender
 }
 
 var runtime Runtime
@@ -56,6 +58,10 @@ func GetDBKV() *dbkv.DBKV {
 	return runtime.DBKV
 }
 
+func GetEmail() *email.Sender {
+	return runtime.Email
+}
+
 /*
 	Init can never be called more than once or by multiple goroutines simultaneously.
 	Any Error return will be followed by Close being called.
@@ -70,6 +76,17 @@ func InitDB(ctx context.Context, appConfig *config.AppConfig) error {
 	}
 	runtime.DB = db
 	slog.Info("database initialized")
+	return nil
+}
+
+func InitEmail(appConfig *config.AppConfig) error {
+	slog.Info("initialize email...")
+	sender, err := email.New(appConfig.Email)
+	if err != nil {
+		return fmt.Errorf("initialize email: %w", err)
+	}
+	runtime.Email = sender
+	slog.Info("email initialized")
 	return nil
 }
 
@@ -224,6 +241,12 @@ func Init(ctx context.Context, appConfig *config.AppConfig) error {
 	if err := InitHttpServer(appConfig); err != nil {
 		slog.Error("failed to initialize HTTP server:" + err.Error())
 		return fmt.Errorf("initialize HTTP server: %w", err)
+	}
+
+	// Initialize the email component
+	if err := InitEmail(appConfig); err != nil {
+		slog.Error("failed to initialize email:" + err.Error())
+		return fmt.Errorf("initialize email: %w", err)
 	}
 
 	// All components initialized successfully

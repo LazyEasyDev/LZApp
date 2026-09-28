@@ -2,6 +2,7 @@ package config
 
 import (
 	"github.com/LazyEasyDev/LZApp/config/db_config"
+	"github.com/LazyEasyDev/LZApp/config/email_config"
 	"github.com/LazyEasyDev/LZApp/config/http_config"
 	"github.com/LazyEasyDev/LZApp/config/lcache_config"
 	"github.com/LazyEasyDev/LZApp/config/log_config"
@@ -22,6 +23,7 @@ type AppConfig struct {
 	Profile  Profile                         `json:"profile"`
 	HTTP     *http_config.HTTPConfig         `json:"http"`
 	DB       *db_config.DBConfig             `json:"database"`
+	Email    *email_config.EmailConfig       `json:"email"`
 	Redis    *redis_config.RedisConfig       `json:"redis"`
 	Log      *log_config.LogConfig           `json:"log"`
 	Cache    *lcache_config.LocalCacheConfig `json:"cache"`
@@ -59,6 +61,10 @@ func newDefaultConfig() AppConfig {
 		DB: &db_config.DBConfig{
 			Host: "127.0.0.1",
 			Port: 3306,
+		},
+		Email: &email_config.EmailConfig{
+			Port:           587,
+			TimeoutSeconds: 8,
 		},
 		Redis: &redis_config.RedisConfig{
 			ClusterMode:         true,
