@@ -2,18 +2,18 @@ package easyroutine
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/LazyEasyDev/EasyRoutine"
-	"github.com/LazyEasyDev/LZApp/components/gormdb"
-	"gorm.io/gorm"
 )
 
-func Init(ctx context.Context, database *gorm.DB) error {
-	sqlDB, err := gormdb.SQLDB(database)
-	if err != nil {
-		return fmt.Errorf("get SQL database: %w", err)
+func Init(ctx context.Context, sqlDB *sql.DB) error {
+
+	if sqlDB == nil {
+		return fmt.Errorf("SQL database is nil")
 	}
+
 	if err := EasyRoutine.InitSQLLease(ctx, sqlDB, EasyRoutine.SQLMySQL); err != nil {
 		return fmt.Errorf("initialize MySQL lease: %w", err)
 	}

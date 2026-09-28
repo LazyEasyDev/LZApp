@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/LazyEasyDev/EasyRoutine"
+	"github.com/LazyEasyDev/LZApp/app/core/dbkv"
 	"github.com/LazyEasyDev/LZApp/app/core/httpapi"
 	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/LazyEasyDev/LZApp/config"
@@ -19,7 +20,9 @@ func Run(ctx context.Context) (runErr error) {
 		if runErr != nil {
 			cancelAll(runErr)
 		}
-		cleanupErr := components.WaitAndClose()
+		EasyRoutine.Wait()
+
+		cleanupErr := components.Close()
 		cause := context.Cause(ctx)
 		if errors.Is(cause, context.Canceled) || errors.Is(cause, runErr) {
 			cause = nil
@@ -36,8 +39,13 @@ func Run(ctx context.Context) (runErr error) {
 
 func Start(ctx context.Context, cancelAll context.CancelCauseFunc) error {
 
-	//start HTTP service if enabled
+	// Initialize dbkv (database key-value store)////////////////////////////////
+	if err := dbkv.Init(ctx, components.GetDB()); err != nil {
+		return fmt.Errorf("initialize dbkv: %w", err)
+	}
+	////////////////////////////////////////////////////////////////////////////////
 
+	/////////////////start HTTP service if enabled////////////////////////////////
 	_, err := EasyRoutine.SafeGo(
 		ctx, func(taskCtx context.Context) {
 			if err := httpapi.Start(taskCtx); err != nil {
@@ -54,6 +62,7 @@ func Start(ctx context.Context, cancelAll context.CancelCauseFunc) error {
 		cancelAll(err)
 		return err
 	}
+	////////////////////////////////////////////////////////////////
 
 	// add additional services here if needed
 

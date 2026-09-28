@@ -10,7 +10,6 @@ import (
 
 	"github.com/LazyEasyDev/EasyRoutine"
 
-	"github.com/LazyEasyDev/LZApp/components/dbkv"
 	"github.com/LazyEasyDev/LZApp/components/easylog"
 	"github.com/LazyEasyDev/LZApp/components/easyroutine"
 	"github.com/LazyEasyDev/LZApp/components/email"
@@ -25,7 +24,6 @@ import (
 
 type Runtime struct {
 	DB       *gorm.DB
-	DBKV     *dbkv.DBKV
 	Redis    *rediscomponent.Client
 	HTTP     *httpserver.Server
 	Security *security.HMACTokenSigner
@@ -52,10 +50,6 @@ func GetHTTP() *httpserver.Server {
 
 func GetSecurity() *security.HMACTokenSigner {
 	return runtime.Security
-}
-
-func GetDBKV() *dbkv.DBKV {
-	return runtime.DBKV
 }
 
 func GetEmail() *email.Sender {
@@ -101,25 +95,6 @@ func CloseDB() error {
 		slog.Info("database closed")
 	}
 	return nil
-}
-
-func InitDBKV(ctx context.Context, appConfig *config.AppConfig) error {
-	slog.Info("initialize dbkv ...")
-	store, err := dbkv.New(ctx, runtime.DB)
-	if err != nil {
-		return fmt.Errorf("initialize dbkv: %w", err)
-	}
-	runtime.DBKV = store
-	slog.Info("dbkv initialized")
-	return nil
-}
-
-func CloseDBKV() {
-	if runtime.DBKV != nil {
-		slog.Info("closing dbkv ...")
-		runtime.DBKV.Close()
-		slog.Info("dbkv closed")
-	}
 }
 
 func InitRedis(ctx context.Context, appConfig *config.AppConfig) error {
@@ -225,16 +200,16 @@ func Init(ctx context.Context, appConfig *config.AppConfig) error {
 		return fmt.Errorf("initialize database: %w", err)
 	}
 
-	// initialize the routine coordinator
-	if err := easyroutine.Init(ctx, runtime.DB); err != nil {
-		slog.Error("failed to initialize routine coordinator:" + err.Error())
-		return fmt.Errorf("initialize routine coordinator: %w", err)
+	sqlDB, err := gormdb.SQLDB(GetDB())
+	if err != nil {
+		slog.Error("failed to get SQL database:" + err.Error())
+		return fmt.Errorf("get SQL database: %w", err)
 	}
 
-	// Initialize the dbkv component
-	if err := InitDBKV(ctx, appConfig); err != nil {
-		slog.Error("failed to initialize dbkv:" + err.Error())
-		return fmt.Errorf("initialize dbkv: %w", err)
+	// initialize the routine coordinator
+	if err := easyroutine.Init(ctx, sqlDB); err != nil {
+		slog.Error("failed to initialize routine coordinator:" + err.Error())
+		return fmt.Errorf("initialize routine coordinator: %w", err)
 	}
 
 	// Initialize the HTTP server if enabled
@@ -264,8 +239,6 @@ func closeComponents() error {
 	if err := CloseHttpServer(); err != nil {
 		errs = append(errs, err)
 	}
-	// Close the dbkv component if it was initialized
-	CloseDBKV()
 	if err := CloseRedis(); err != nil {
 		errs = append(errs, err)
 	}
@@ -288,10 +261,15 @@ func closeComponents() error {
 // WaitAndClose waits for all routines to complete and then closes all initialized components.
 // Local cache and easylog are closed after all routines have completed.
 // Previous global slog is restored after all components have been closed.
-func WaitAndClose() (closeErr error) {
+func WaitAndClose() error {
 	slog.Info("waiting for all routines to complete before closing components")
 	slog.Info("--------------------------------------------------------------")
 	//wait for all routines to complete
+	EasyRoutine.Wait()
+	return Close()
+}
+
+func Close() (closeErr error) {
 	defer func() {
 		// Close the local cache component first
 		lcache.Close()
@@ -301,6 +279,5 @@ func WaitAndClose() (closeErr error) {
 		}
 	}()
 
-	EasyRoutine.Wait()
 	return closeComponents()
 }

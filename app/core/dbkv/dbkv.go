@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
@@ -34,42 +35,52 @@ func (Entry) TableName() string {
 	return "dbkv"
 }
 
-var ErrNotInitialized = errors.New("dbkv cache is not initialized")
+var (
+	ErrNotInitialized     = errors.New("dbkv is not initialized")
+	ErrAlreadyInitialized = errors.New("dbkv is already initialized")
 
-type DBKV struct {
-	database      *gorm.DB
+	lifecycleMu   sync.Mutex
+	database      atomic.Pointer[gorm.DB]
 	cache         atomic.Pointer[map[string]Entry]
 	refreshWorker *easyroutinelib.Handle
+)
+
+func Init(ctx context.Context, connection *gorm.DB) error {
+	return initWithInterval(ctx, connection, updateInterval)
 }
 
-func New(ctx context.Context, database *gorm.DB) (*DBKV, error) {
-	return newWithInterval(ctx, database, updateInterval)
-}
+func initWithInterval(ctx context.Context, connection *gorm.DB, interval time.Duration) error {
+	lifecycleMu.Lock()
+	defer lifecycleMu.Unlock()
 
-func newWithInterval(ctx context.Context, database *gorm.DB, interval time.Duration) (*DBKV, error) {
 	if ctx == nil {
-		return nil, fmt.Errorf("context is required")
+		return fmt.Errorf("context is required")
 	}
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return err
 	}
 	if interval <= 0 {
-		return nil, fmt.Errorf("refresh interval must be positive")
+		return fmt.Errorf("refresh interval must be positive")
 	}
-	if database == nil {
-		return nil, fmt.Errorf("database is not initialized")
+	if connection == nil {
+		return fmt.Errorf("database is not initialized")
+	}
+	if database.Load() != nil {
+		return ErrAlreadyInitialized
 	}
 
-	store := &DBKV{database: database}
-	if err := store.createTable(ctx); err != nil {
-		return nil, fmt.Errorf("create dbkv table: %w", err)
+	if err := createTable(ctx, connection); err != nil {
+		return fmt.Errorf("create dbkv table: %w", err)
 	}
-	if err := ensureUpdateMarker(database.WithContext(ctx)); err != nil {
-		return nil, fmt.Errorf("initialize dbkv update marker: %w", err)
+	if err := ensureUpdateMarker(connection.WithContext(ctx)); err != nil {
+		return fmt.Errorf("initialize dbkv update marker: %w", err)
 	}
-	if err := store.loadSnapshot(ctx); err != nil {
-		return nil, fmt.Errorf("load dbkv cache: %w", err)
+	snapshot, err := loadSnapshot(ctx, connection)
+	if err != nil {
+		return fmt.Errorf("load dbkv cache: %w", err)
 	}
+	database.Store(connection)
+	cache.Store(&snapshot)
 	worker, err := easyroutinelib.SafeGo(ctx, func(taskCtx context.Context) {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -78,7 +89,7 @@ func newWithInterval(ctx context.Context, database *gorm.DB, interval time.Durat
 			case <-taskCtx.Done():
 				return
 			case <-ticker.C:
-				if err := store.refresh(taskCtx); err != nil && taskCtx.Err() == nil {
+				if err := refresh(taskCtx); err != nil && taskCtx.Err() == nil {
 					slog.Error("refresh dbkv cache", "error", err)
 				}
 			}
@@ -88,56 +99,72 @@ func newWithInterval(ctx context.Context, database *gorm.DB, interval time.Durat
 		return easyroutinelib.PanicDecision{Retry: true, After: time.Second}
 	})
 	if err != nil {
-		store.cache.Store(nil)
-		return nil, fmt.Errorf("start dbkv refresh: %w", err)
+		database.Store(nil)
+		cache.Store(nil)
+		return fmt.Errorf("start dbkv refresh: %w", err)
 	}
-	store.refreshWorker = worker
-	return store, nil
+	refreshWorker = worker
+	return nil
 }
 
-func (store *DBKV) Close() {
-	slog.Info("closing dbkv store")
-	if store.refreshWorker != nil {
-		store.refreshWorker.Stop()
-		store.refreshWorker.Wait()
+func Close() {
+	lifecycleMu.Lock()
+	defer lifecycleMu.Unlock()
+
+	if database.Load() == nil && refreshWorker == nil {
+		return
 	}
-	store.cache.Store(nil)
+	slog.Info("closing dbkv store")
+	if refreshWorker != nil {
+		refreshWorker.Stop()
+		refreshWorker.Wait()
+		refreshWorker = nil
+	}
+	database.Store(nil)
+	cache.Store(nil)
 	slog.Info("dbkv store closed")
 }
 
-func (store *DBKV) refresh(ctx context.Context) error {
-	marker, err := store.getFromDatabase(ctx, LastUpdatedKey)
+func refresh(ctx context.Context) error {
+	marker, err := getFromDatabase(ctx, LastUpdatedKey)
 	if err != nil {
 		return err
 	}
-	current := store.cache.Load()
+	current := cache.Load()
 	if current != nil && (*current)[LastUpdatedKey].Value == marker.Value {
 		return nil
 	}
-	return store.loadSnapshot(ctx)
+	snapshot, err := loadSnapshot(ctx, database.Load())
+	if err != nil {
+		return err
+	}
+	cache.Store(&snapshot)
+	return nil
 }
 
-func (store *DBKV) loadSnapshot(ctx context.Context) error {
+func loadSnapshot(ctx context.Context, connection *gorm.DB) (map[string]Entry, error) {
+	if connection == nil {
+		return nil, ErrNotInitialized
+	}
 	var entries []Entry
-	if err := store.database.WithContext(ctx).Find(&entries).Error; err != nil {
-		return err
+	if err := connection.WithContext(ctx).Find(&entries).Error; err != nil {
+		return nil, err
 	}
 	snapshot := make(map[string]Entry, len(entries))
 	for _, entry := range entries {
 		if !json.Valid([]byte(entry.Value)) {
-			return fmt.Errorf("value for %q must be valid JSON", entry.Key)
+			return nil, fmt.Errorf("value for %q must be valid JSON", entry.Key)
 		}
 		snapshot[entry.Key] = entry
 	}
 	if _, exists := snapshot[LastUpdatedKey]; !exists {
-		return fmt.Errorf("dbkv update marker is missing")
+		return nil, fmt.Errorf("dbkv update marker is missing")
 	}
-	store.cache.Store(&snapshot)
-	return nil
+	return snapshot, nil
 }
 
-func (store *DBKV) createTable(ctx context.Context) error {
-	migrator := store.database.WithContext(ctx).Migrator()
+func createTable(ctx context.Context, connection *gorm.DB) error {
+	migrator := connection.WithContext(ctx).Migrator()
 	if migrator.HasTable(&Entry{}) {
 		return nil
 	}
@@ -154,7 +181,7 @@ func validateName(name string) error {
 	return nil
 }
 
-func (store *DBKV) Set(ctx context.Context, name string, value any, description string) error {
+func Set(ctx context.Context, name string, value any, description string) error {
 	// Normalize the key name: trim spaces and convert to lowercase
 	name = strings.TrimSpace(name)
 	if err := validateName(name); err != nil {
@@ -172,7 +199,7 @@ func (store *DBKV) Set(ctx context.Context, name string, value any, description 
 	// Create the entry with the encoded value and description
 	entry := Entry{Key: name, Value: string(encoded), Description: description, Visible: true}
 
-	return store.withUpdateMarker(ctx, func(transaction *gorm.DB) error {
+	return withUpdateMarker(ctx, func(transaction *gorm.DB) error {
 		return upsertEntry(transaction, &entry)
 	})
 }
@@ -196,11 +223,12 @@ func ensureUpdateMarker(database *gorm.DB) error {
 	}).Error
 }
 
-func (store *DBKV) withUpdateMarker(ctx context.Context, change func(*gorm.DB) error) error {
-	if store.database == nil {
-		return fmt.Errorf("database is not initialized")
+func withUpdateMarker(ctx context.Context, change func(*gorm.DB) error) error {
+	connection := database.Load()
+	if connection == nil {
+		return ErrNotInitialized
 	}
-	return store.database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
+	return connection.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		if err := change(transaction); err != nil {
 			return err
 		}
@@ -213,22 +241,23 @@ func (store *DBKV) withUpdateMarker(ctx context.Context, change func(*gorm.DB) e
 	})
 }
 
-func (store *DBKV) GetFromDB(ctx context.Context, name string) (*Entry, error) {
+func GetFromDB(ctx context.Context, name string) (*Entry, error) {
 	// Normalize the key name: trim spaces and convert to lowercase
 	name = strings.TrimSpace(name)
 	if err := validateName(name); err != nil {
 		return nil, err
 	}
 	name = strings.ToLower(name)
-	return store.getFromDatabase(ctx, name)
+	return getFromDatabase(ctx, name)
 }
 
-func (store *DBKV) getFromDatabase(ctx context.Context, name string) (*Entry, error) {
-	if store.database == nil {
-		return nil, fmt.Errorf("database is not initialized")
+func getFromDatabase(ctx context.Context, name string) (*Entry, error) {
+	connection := database.Load()
+	if connection == nil {
+		return nil, ErrNotInitialized
 	}
 	var entry Entry
-	if err := store.database.WithContext(ctx).
+	if err := connection.WithContext(ctx).
 		Where(clause.Eq{Column: "key", Value: name}).First(&entry).Error; err != nil {
 		return nil, err
 	}
@@ -238,7 +267,7 @@ func (store *DBKV) getFromDatabase(ctx context.Context, name string) (*Entry, er
 	return &entry, nil
 }
 
-func (store *DBKV) GetRecord(ctx context.Context, name string) (*Entry, error) {
+func GetRecord(ctx context.Context, name string) (*Entry, error) {
 	name = strings.TrimSpace(name)
 	if err := validateName(name); err != nil {
 		return nil, err
@@ -247,7 +276,7 @@ func (store *DBKV) GetRecord(ctx context.Context, name string) (*Entry, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	snapshot := store.cache.Load()
+	snapshot := cache.Load()
 	if snapshot == nil {
 		return nil, ErrNotInitialized
 	}
@@ -258,11 +287,11 @@ func (store *DBKV) GetRecord(ctx context.Context, name string) (*Entry, error) {
 	return &entry, nil
 }
 
-func (store *DBKV) List(ctx context.Context) ([]Entry, error) {
+func List(ctx context.Context) ([]Entry, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	snapshot := store.cache.Load()
+	snapshot := cache.Load()
 	if snapshot == nil {
 		return nil, ErrNotInitialized
 	}
@@ -278,7 +307,7 @@ func (store *DBKV) List(ctx context.Context) ([]Entry, error) {
 	return entries, nil
 }
 
-func (store *DBKV) Delete(ctx context.Context, name string) error {
+func Delete(ctx context.Context, name string) error {
 	// Normalize the key name: trim spaces and convert to lowercase
 	name = strings.TrimSpace(name)
 	if err := validateName(name); err != nil {
@@ -289,7 +318,7 @@ func (store *DBKV) Delete(ctx context.Context, name string) error {
 		return fmt.Errorf("key %q is reserved", name)
 	}
 
-	return store.withUpdateMarker(ctx, func(transaction *gorm.DB) error {
+	return withUpdateMarker(ctx, func(transaction *gorm.DB) error {
 		result := transaction.Where(clause.Eq{Column: "key", Value: name}).Delete(&Entry{})
 		if result.Error != nil {
 			return result.Error
@@ -301,41 +330,41 @@ func (store *DBKV) Delete(ctx context.Context, name string) error {
 	})
 }
 
-func (store *DBKV) SetString(ctx context.Context, name, value string, description string) error {
-	return store.Set(ctx, name, value, description)
+func SetString(ctx context.Context, name, value string, description string) error {
+	return Set(ctx, name, value, description)
 }
 
-func (store *DBKV) GetString(ctx context.Context, name string) (string, error) {
-	return Get[string](ctx, store, name)
+func GetString(ctx context.Context, name string) (string, error) {
+	return Get[string](ctx, name)
 }
 
-func (store *DBKV) SetInt64(ctx context.Context, name string, value int64, description string) error {
-	return store.Set(ctx, name, value, description)
+func SetInt64(ctx context.Context, name string, value int64, description string) error {
+	return Set(ctx, name, value, description)
 }
 
-func (store *DBKV) GetInt64(ctx context.Context, name string) (int64, error) {
-	return Get[int64](ctx, store, name)
+func GetInt64(ctx context.Context, name string) (int64, error) {
+	return Get[int64](ctx, name)
 }
 
-func (store *DBKV) SetBool(ctx context.Context, name string, value bool, description string) error {
-	return store.Set(ctx, name, value, description)
+func SetBool(ctx context.Context, name string, value bool, description string) error {
+	return Set(ctx, name, value, description)
 }
 
-func (store *DBKV) GetBool(ctx context.Context, name string) (bool, error) {
-	return Get[bool](ctx, store, name)
+func GetBool(ctx context.Context, name string) (bool, error) {
+	return Get[bool](ctx, name)
 }
 
-func (store *DBKV) SetFloat64(ctx context.Context, name string, value float64, description string) error {
-	return store.Set(ctx, name, value, description)
+func SetFloat64(ctx context.Context, name string, value float64, description string) error {
+	return Set(ctx, name, value, description)
 }
 
-func (store *DBKV) GetFloat64(ctx context.Context, name string) (float64, error) {
-	return Get[float64](ctx, store, name)
+func GetFloat64(ctx context.Context, name string) (float64, error) {
+	return Get[float64](ctx, name)
 }
 
-func Get[ValueType any](ctx context.Context, store *DBKV, name string) (ValueType, error) {
+func Get[ValueType any](ctx context.Context, name string) (ValueType, error) {
 	var zero ValueType
-	entry, err := store.GetRecord(ctx, name)
+	entry, err := GetRecord(ctx, name)
 	if err != nil {
 		return zero, err
 	}
