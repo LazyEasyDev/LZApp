@@ -11,7 +11,15 @@ import (
 )
 
 func EnsureDatabase(ctx context.Context, dbConfig *db_config.DBConfig) (ensureErr error) {
-	if dbConfig == nil || dbConfig.DBName == "" {
+	if ctx == nil {
+		return fmt.Errorf("context is required")
+	}
+
+	if dbConfig == nil {
+		return fmt.Errorf("database configuration is required")
+	}
+
+	if dbConfig.DBName == "" {
 		return fmt.Errorf("database name is required")
 	}
 

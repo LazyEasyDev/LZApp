@@ -7,7 +7,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/LazyEasyDev/LZApp/config"
 	"github.com/LazyEasyDev/LZApp/config/db_config"
 	mysqldriver "github.com/go-sql-driver/mysql"
 	"gorm.io/driver/mysql"
@@ -15,13 +14,31 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
-func New(ctx context.Context, appConfig *config.AppConfig) (*gorm.DB, error) {
-	logMode := gormlogger.Warn
-	if appConfig.Profile == config.ProfileDebug {
-		logMode = gormlogger.Info
+func New(ctx context.Context, dbConfig *db_config.DBConfig) (*gorm.DB, error) {
+
+	if ctx == nil {
+		return nil, fmt.Errorf("context is required")
 	}
 
-	database, err := gorm.Open(mysql.Open(dataSourceName(appConfig.DB)), &gorm.Config{
+	if dbConfig == nil {
+		return nil, fmt.Errorf("database configuration is required")
+	}
+
+	logMode := gormlogger.Warn
+	switch dbConfig.LogLevel {
+	case "silent":
+		logMode = gormlogger.Silent
+	case "error":
+		logMode = gormlogger.Error
+	case "warn":
+		logMode = gormlogger.Warn
+	case "info":
+		logMode = gormlogger.Info
+	default:
+		logMode = gormlogger.Warn
+	}
+
+	database, err := gorm.Open(mysql.Open(dataSourceName(dbConfig)), &gorm.Config{
 		Logger: gormlogger.Default.LogMode(logMode),
 	})
 	if err != nil {

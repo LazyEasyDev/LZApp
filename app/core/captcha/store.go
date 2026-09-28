@@ -1,12 +1,14 @@
 package captcha
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"errors"
+	"fmt"
 	"time"
 
-	"github.com/LazyEasyDev/LCache"
+	"github.com/LazyEasyDev/LZApp/components"
 )
 
 const (
@@ -19,18 +21,15 @@ const (
 
 var ErrCacheUnavailable = errors.New("captcha cache is unavailable")
 
-type challenge struct {
-	answer    string
-	expiresAt time.Time
-}
-
 func storeAnswer(answer string, expirationSeconds int64) (string, error) {
+	client := components.GetRedis()
+	if client == nil {
+		return "", ErrCacheUnavailable
+	}
 	id := rand.Text()
 	key := keyPrefix + id
-	entry := &challenge{answer: answer, expiresAt: time.Now().Add(time.Duration(expirationSeconds) * time.Second)}
-	LCache.Set(key, entry, expirationSeconds)
-	if stored, found := LCache.Get(key); !found || stored != entry {
-		return "", ErrCacheUnavailable
+	if err := client.Set(context.Background(), key, answer, time.Duration(expirationSeconds)*time.Second).Err(); err != nil {
+		return "", fmt.Errorf("%w: %w", ErrCacheUnavailable, err)
 	}
 	return id, nil
 }
@@ -39,14 +38,14 @@ func Verify(id, answer string) bool {
 	if len(id) != 26 {
 		return false
 	}
+	client := components.GetRedis()
+	if client == nil {
+		return false
+	}
 	key := keyPrefix + id
-	value, found := LCache.Get(key)
-	if !found || !LCache.Delete(key) {
+	storedAnswer, err := client.GetDel(context.Background(), key).Result()
+	if err != nil {
 		return false
 	}
-	entry, ok := value.(*challenge)
-	if !ok || entry == nil || !time.Now().Before(entry.expiresAt) {
-		return false
-	}
-	return len(answer) == Length && subtle.ConstantTimeCompare([]byte(entry.answer), []byte(answer)) == 1
+	return len(answer) == Length && subtle.ConstantTimeCompare([]byte(storedAnswer), []byte(answer)) == 1
 }

@@ -7,4 +7,5 @@ type DBConfig struct {
 	Password string `json:"password"`
 	DBName   string `json:"db_name"`
 	Charset  string `json:"charset"`
+	LogLevel string `json:"log_level"` // possible values: "silent", "error", "warn", "info"
 }

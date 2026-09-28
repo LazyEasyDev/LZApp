@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/LazyEasyDev/LZApp/config/security_config"
 )
 
 var (
@@ -27,34 +29,36 @@ type HMACTokenSigner struct {
 	signatureBytes int
 }
 
-func NewHMACTokenSigner(key []byte, options ...HMACTokenOptions) (*HMACTokenSigner, error) {
-	if len(options) > 1 {
-		return nil, fmt.Errorf("at most one HMAC token options value is allowed")
+func NewHMACTokenSigner(hmacConfig *security_config.SecurityHMACConfig) (*HMACTokenSigner, error) {
+	if hmacConfig == nil {
+		return nil, fmt.Errorf("HMAC configuration is required")
 	}
-	var settings HMACTokenOptions
-	if len(options) == 1 {
-		settings = options[0]
+
+	key := []byte(hmacConfig.HMACKey)
+
+	PayloadBytes := hmacConfig.HMACTokenBytes
+	if PayloadBytes == 0 {
+		PayloadBytes = sha256.Size
 	}
-	if settings.PayloadBytes == 0 {
-		settings.PayloadBytes = sha256.Size
+	SignatureBytes := hmacConfig.HMACTokenBytes
+	if SignatureBytes == 0 {
+		SignatureBytes = sha256.Size
 	}
-	if settings.SignatureBytes == 0 {
-		settings.SignatureBytes = sha256.Size
-	}
+
 	for _, size := range []struct {
 		name  string
 		bytes int
 	}{
-		{name: "payload", bytes: settings.PayloadBytes},
-		{name: "signature", bytes: settings.SignatureBytes},
+		{name: "payload", bytes: PayloadBytes},
+		{name: "signature", bytes: SignatureBytes},
 	} {
 		if size.bytes < 16 || size.bytes > sha256.Size {
 			return nil, fmt.Errorf("HMAC token %s size must be between 16 and %d bytes", size.name, sha256.Size)
 		}
 	}
 	signer := &HMACTokenSigner{
-		payloadBytes:   settings.PayloadBytes,
-		signatureBytes: settings.SignatureBytes,
+		payloadBytes:   PayloadBytes,
+		signatureBytes: SignatureBytes,
 	}
 	key = bytes.TrimSpace(key)
 	if len(key) == 0 {
@@ -69,7 +73,7 @@ func NewHMACTokenSigner(key []byte, options ...HMACTokenOptions) (*HMACTokenSign
 	return signer, nil
 }
 
-func (signer *HMACTokenSigner) Generate() (string, error) {
+func (signer *HMACTokenSigner) GenerateRandToken() (string, error) {
 	if signer == nil || len(signer.key) < sha256.Size {
 		return "", ErrNotInitialized
 	}
@@ -81,7 +85,7 @@ func (signer *HMACTokenSigner) Generate() (string, error) {
 		base64.RawURLEncoding.EncodeToString(signer.signature(payload)), nil
 }
 
-func (signer *HMACTokenSigner) Verify(token string) error {
+func (signer *HMACTokenSigner) VerifyToken(token string) error {
 	if signer == nil || len(signer.key) < sha256.Size {
 		return ErrNotInitialized
 	}

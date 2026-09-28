@@ -14,17 +14,21 @@ import (
 
 func Run(ctx context.Context) (runErr error) {
 	appConfig := config.GetConfig()
-	if appConfig == nil || appConfig.DB == nil {
-		return fmt.Errorf("database is disabled or not configured")
+	if appConfig == nil {
+		return fmt.Errorf("application configuration is required")
 	}
+	// Ensure the database exists before initializing it.
 	if err := gormdb.EnsureDatabase(ctx, appConfig.DB); err != nil {
 		return err
 	}
 	// Initialize the database component
-	init_err := components.InitDB(ctx, appConfig)
+	init_err := components.InitDB(ctx, appConfig.DB)
 	if init_err != nil {
 		return init_err
 	}
+	//
+	components.InitSecurity(appConfig.SecurityHMAC, appConfig.SecurityBcrypt)
+
 	defer func() {
 		if err := components.CloseDB(); err != nil {
 			runErr = errors.Join(runErr, err)

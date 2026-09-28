@@ -13,9 +13,9 @@ type DocsTokenView struct {
 // implment your view list here
 func DocsTokenViewHandler(api_token string) DocsTokenView {
 
-	signer := components.GetSecurity()
+	signer := components.GetTokenSigner()
 
-	if signer != nil && signer.Verify(api_token) == nil {
+	if signer != nil && signer.VerifyToken(api_token) == nil {
 		return DocsTokenView{
 			Token:             api_token,
 			AllowedOperations: []string{"GET /health", "GET /setAuth", "GET /auth_check"},

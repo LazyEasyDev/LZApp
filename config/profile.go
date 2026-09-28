@@ -20,14 +20,15 @@ const (
 ////below are optional///////
 
 type AppConfig struct {
-	Profile  Profile                         `json:"profile"`
-	HTTP     *http_config.HTTPConfig         `json:"http"`
-	DB       *db_config.DBConfig             `json:"database"`
-	Email    *email_config.EmailConfig       `json:"email"`
-	Redis    *redis_config.RedisConfig       `json:"redis"`
-	Log      *log_config.LogConfig           `json:"log"`
-	Cache    *lcache_config.LocalCacheConfig `json:"cache"`
-	Security *security_config.SecurityConfig `json:"security"`
+	Profile        Profile                               `json:"profile"`
+	HTTP           *http_config.HTTPConfig               `json:"http"`
+	DB             *db_config.DBConfig                   `json:"database"`
+	Email          *email_config.EmailConfig             `json:"email"`
+	Redis          *redis_config.RedisConfig             `json:"redis"`
+	Log            *log_config.LogConfig                 `json:"log"`
+	Cache          *lcache_config.LocalCacheConfig       `json:"cache"`
+	SecurityHMAC   *security_config.SecurityHMACConfig   `json:"security_hmac"`
+	SecurityBcrypt *security_config.SecurityBcryptConfig `json:"security_bcrypt"`
 }
 
 func newDefaultConfig() AppConfig {
@@ -42,9 +43,12 @@ func newDefaultConfig() AppConfig {
 		Cache: &lcache_config.LocalCacheConfig{
 			MaxTTLSeconds: 24 * 60 * 60,
 		},
-		Security: &security_config.SecurityConfig{
+		SecurityHMAC: &security_config.SecurityHMACConfig{
 			HMACKey:        "",
 			HMACTokenBytes: 32,
+		},
+		SecurityBcrypt: &security_config.SecurityBcryptConfig{
+			Cost: 10,
 		},
 		////optional
 		HTTP: &http_config.HTTPConfig{
@@ -59,8 +63,9 @@ func newDefaultConfig() AppConfig {
 			ShutdownTimeoutSeconds:   60,
 		},
 		DB: &db_config.DBConfig{
-			Host: "127.0.0.1",
-			Port: 3306,
+			Host:     "127.0.0.1",
+			Port:     3306,
+			LogLevel: "warn",
 		},
 		Email: &email_config.EmailConfig{
 			Port:           587,

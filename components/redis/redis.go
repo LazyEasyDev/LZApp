@@ -28,6 +28,10 @@ func New(ctx context.Context, settings *redis_config.RedisConfig) (*Client, erro
 	if ctx == nil {
 		return nil, fmt.Errorf("context is required")
 	}
+	if settings == nil {
+		return nil, fmt.Errorf("redis configuration is required")
+	}
+
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -140,6 +144,10 @@ func (client *Client) Key(name string) string {
 
 func (client *Client) Get(ctx context.Context, name string) *goredis.StringCmd {
 	return client.client.Get(ctx, client.Key(name))
+}
+
+func (client *Client) GetDel(ctx context.Context, name string) *goredis.StringCmd {
+	return client.client.GetDel(ctx, client.Key(name))
 }
 
 func (client *Client) Set(ctx context.Context, name string, value any, expiration time.Duration) *goredis.StatusCmd {

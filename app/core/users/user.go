@@ -20,7 +20,8 @@ type User struct {
 	ID        uint64    `gorm:"primaryKey" json:"id"`
 	Name      *string   `gorm:"size:100" json:"name"`
 	Email     string    `gorm:"size:254;not null;uniqueIndex" json:"email"`
-	ApiToken  string    `gorm:"size:64;not null;uniqueIndex" json:"api_token"`
+	Password  string    `gorm:"size:128;not null" json:"-"`
+	ApiToken  string    `gorm:"size:128;not null;uniqueIndex" json:"api_token"`
 	Access    string    `gorm:"type:text" json:"access"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -37,10 +38,24 @@ func CreateTable(ctx context.Context) error {
 func InitData(ctx context.Context) error {
 	database := components.GetDB()
 	name := "admin"
+	password_plain := "admin"
+	email := "admin@lzapp.local"
+	pass, err := components.GetPasswordHasher().HashPassword(password_plain)
+	if err != nil {
+		return err
+	}
+
+	apiToken, err := components.GetTokenSigner().GenerateRandToken() // Replace with a proper API token generator
+	if err != nil {
+		return err
+	}
+	// Initialize the admin user with the given credentials
 	initial := User{
-		Name:   &name,
-		Email:  "admin@lzapp.local",
-		Access: GetAccessListJsonStr(),
+		Name:     &name,
+		Email:    email,
+		Access:   GetAccessListJsonStr(),
+		Password: pass,
+		ApiToken: apiToken, // Replace with a proper initial API token if needed
 	}
 	return database.WithContext(ctx).
 		Where(User{Email: initial.Email}).
