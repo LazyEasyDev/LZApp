@@ -3,10 +3,10 @@ package httpapi
 import (
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/LazyEasyDev/LZApp/app/core/httpapi/handler"
 	"github.com/LazyEasyDev/LZApp/app/core/httpapi/handler/docs"
+	"github.com/LazyEasyDev/LZApp/app/core/httpapi/handler/user"
 	"github.com/LazyEasyDev/LZApp/app/core/httpapi/middleware"
 	huma "github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
@@ -14,6 +14,7 @@ import (
 
 func registerRoutes(api huma.API) {
 
+	api.UseMiddleware(middleware.NoStoreMiddleware())
 	api.UseMiddleware(middleware.ClientIPMiddleware(api))
 
 	// Docs routes
@@ -31,11 +32,8 @@ func registerRoutes(api huma.API) {
 	slog.Debug("Registering health route")
 	huma.Get(api, "/health", handler.HealthHandler)
 
-	// Secure route requiring authentication
-	huma.Get(api, "/auth/set", handler.SetAuthHandler)
-	huma.Get(api, "/auth/check", handler.AuthCheckHandler,
-		middleware.WithSpeedLimit(api, middleware.SpeedLimitPolicy{Requests: 1, Window: 10 * time.Second}),
-		middleware.WithAuth(api, middleware.ValidateHMACToken))
+	// User routes
+	user.RegisterRoutes(api)
 
 	// Additional routes can be registered here
 

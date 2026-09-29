@@ -22,6 +22,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/cors"
 )
 
 type Server struct {
@@ -68,15 +69,30 @@ func New(httpConfig *http_config.HTTPConfig) (*Server, error) {
 	}
 
 	router := chi.NewRouter()
+
+	// Apply CORS middleware to the router
+	router.Use(cors.New(cors.Options{
+		AllowOriginFunc:  func(string) bool { return true },
+		AllowCredentials: true,
+		AllowedHeaders:   []string{"*"},
+	}).Handler)
+
+	// Override Huma's default error handling and summary generation functions
 	huma.NewError = newError
 	huma.GenerateSummary = func(_ string, path string, _ any) string {
 		return path
 	}
+	// Initialize Huma API with the router and configuration
 	apiConfig := huma.DefaultConfig("LZApp API", "1.0.0")
 	apiConfig.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
 		"bearerAuth": {
 			Type:   "http",
 			Scheme: "bearer",
+		},
+		"cookieAuth": {
+			Type: "apiKey",
+			In:   "cookie",
+			Name: httpConfig.APITokenCookieName,
 		},
 	}
 	apiConfig.Security = []map[string][]string{{"bearerAuth": {}}, {}}

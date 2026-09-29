@@ -2,11 +2,14 @@ package docs
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"github.com/LazyEasyDev/LZApp/app/core/httpapi/middleware"
 	"github.com/LazyEasyDev/LZApp/config"
+	"gorm.io/gorm"
 )
 
 func DocsTokenHandler(writer http.ResponseWriter, request *http.Request) {
@@ -24,14 +27,17 @@ func DocsTokenHandler(writer http.ResponseWriter, request *http.Request) {
 	}
 	api_token := ""
 	cookies := request.CookiesNamed(httpConfig.APITokenCookieName)
-	if len(cookies) != 1 || cookies[0].Value == "" || len(cookies[0].Value) > 8192 {
-		api_token = ""
-	} else {
+	if len(cookies) == 1 && cookies[0].Value != "" && len(cookies[0].Value) <= 128 {
 		api_token = cookies[0].Value
 	}
 
+	account, err := middleware.ValidateUserToken(request.Context(), api_token)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		http.Error(writer, "Token unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	writer.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(writer).Encode(DocsTokenViewHandler(api_token))
+	_ = json.NewEncoder(writer).Encode(DocsTokenViewHandler(account))
 }
 
 func sameOriginDocsRequest(request *http.Request) bool {

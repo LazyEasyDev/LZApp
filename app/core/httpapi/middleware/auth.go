@@ -2,61 +2,66 @@ package middleware
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
-	"github.com/LazyEasyDev/LZApp/components"
+	"github.com/LazyEasyDev/LZApp/app/core/users"
+	"github.com/LazyEasyDev/LZApp/config"
 	"github.com/danielgtaylor/huma/v2"
+	"gorm.io/gorm"
 )
 
-type AuthIdentity struct {
-	Subject string
-}
+type authUserContextKey struct{}
 
-type AuthHandler func(context.Context, string) (AuthIdentity, error)
+func UserAuthMiddleware(api huma.API) func(huma.Context, func(huma.Context)) {
 
-type authIdentityContextKey struct{}
-
-func ValidateHMACToken(_ context.Context, token string) (AuthIdentity, error) {
-	if err := components.GetTokenSigner().VerifyToken(token); err != nil {
-		return AuthIdentity{}, err
-	}
-	payload, _, _ := strings.Cut(token, ".")
-	return AuthIdentity{Subject: payload}, nil
-}
-
-func WithAuth(api huma.API, validateToken AuthHandler) func(*huma.Operation) {
-	authenticate := AuthMiddleware(api, validateToken)
-	return func(operation *huma.Operation) {
-		operation.Middlewares = append(operation.Middlewares, authenticate)
-		operation.Security = []map[string][]string{{"bearerAuth": {}}}
-	}
-}
-
-func AuthMiddleware(api huma.API, validateToken AuthHandler) func(huma.Context, func(huma.Context)) {
-	if validateToken == nil {
-		panic("authentication requires a token validator")
-	}
 	return func(ctx huma.Context, next func(huma.Context)) {
-		token, valid := bearerToken(ctx)
-		if !valid {
-			ctx.SetHeader("WWW-Authenticate", "Bearer")
-			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "bearer token required")
+		var tokens []string
+		if token, valid := bearerToken(ctx); valid && len(token) <= 128 {
+			tokens = append(tokens, token)
+		}
+		if settings := config.GetConfig().HTTP; settings != nil && settings.APITokenCookieName != "" {
+			cookieToken, matches := "", 0
+			for _, cookie := range huma.ReadCookies(ctx) {
+				if cookie.Name == settings.APITokenCookieName {
+					cookieToken = cookie.Value
+					matches++
+				}
+			}
+			if matches == 1 && cookieToken != "" && len(cookieToken) <= 128 && (len(tokens) == 0 || tokens[0] != cookieToken) {
+				tokens = append(tokens, cookieToken)
+			}
+		}
+		var lookupFailed bool
+		for _, token := range tokens {
+			account, err := ValidateUserToken(ctx.Context(), token)
+			if err != nil {
+				lookupFailed = lookupFailed || !errors.Is(err, gorm.ErrRecordNotFound)
+				continue
+			}
+			if account != nil && account.ID != 0 {
+				requestUser := *account
+				next(huma.WithValue(ctx, authUserContextKey{}, &requestUser))
+				return
+			}
+		}
+		if lookupFailed {
+			_ = huma.WriteErr(api, ctx, http.StatusServiceUnavailable, "authentication is unavailable")
 			return
 		}
-		identity, err := validateToken(ctx.Context(), token)
-		if err != nil || strings.TrimSpace(identity.Subject) == "" {
-			ctx.SetHeader("WWW-Authenticate", `Bearer error="invalid_token"`)
-			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "invalid bearer token")
-			return
-		}
-		next(huma.WithValue(ctx, authIdentityContextKey{}, identity))
+		ctx.SetHeader("WWW-Authenticate", "Bearer")
+		_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "valid API token or login cookie required")
 	}
 }
 
-func GetAuthIdentity(ctx context.Context) (AuthIdentity, bool) {
-	identity, authenticated := ctx.Value(authIdentityContextKey{}).(AuthIdentity)
-	return identity, authenticated
+func ValidateUserToken(ctx context.Context, token string) (*users.User, error) {
+	return users.GetByApiToken(ctx, token)
+}
+
+func GetAuthUser(ctx context.Context) (*users.User, bool) {
+	account, ok := ctx.Value(authUserContextKey{}).(*users.User)
+	return account, ok && account != nil
 }
 
 func bearerToken(ctx huma.Context) (string, bool) {

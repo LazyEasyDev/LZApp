@@ -19,31 +19,26 @@ type requestCounter struct {
 	count atomic.Uint64
 }
 
-func WithSpeedLimit(api huma.API, policy SpeedLimitPolicy) func(*huma.Operation) {
-	return withSpeedLimitCache(api, policy)
-}
-
-func withSpeedLimitCache(api huma.API, policy SpeedLimitPolicy) func(*huma.Operation) {
+func SpeedLimitMiddleware(api huma.API, policy SpeedLimitPolicy) func(huma.Context, func(huma.Context)) {
 	if policy.Requests == 0 || policy.Window <= 0 || policy.Window%time.Second != 0 {
 		panic("speed limit requires a positive request count and a positive whole-second window")
 	}
 	windowSeconds := int64(policy.Window / time.Second)
 
-	return func(operation *huma.Operation) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		operation := ctx.Operation()
 		route := operation.Method + " " + operation.Path
-		operation.Middlewares = append(operation.Middlewares, func(ctx huma.Context, next func(huma.Context)) {
-			retryAfterSeconds, err := consumeRequest(route, GetClientIP(ctx.Context()), policy.Requests, windowSeconds)
-			if err != nil {
-				_ = huma.WriteErr(api, ctx, http.StatusInternalServerError, "request limiter unavailable")
-				return
-			}
-			if retryAfterSeconds > 0 {
-				ctx.SetHeader("Retry-After", strconv.FormatInt(retryAfterSeconds, 10))
-				_ = huma.WriteErr(api, ctx, http.StatusTooManyRequests, "request limit exceeded")
-				return
-			}
-			next(ctx)
-		})
+		retryAfterSeconds, err := consumeRequest(route, GetClientIP(ctx.Context()), policy.Requests, windowSeconds)
+		if err != nil {
+			_ = huma.WriteErr(api, ctx, http.StatusInternalServerError, "request limiter unavailable")
+			return
+		}
+		if retryAfterSeconds > 0 {
+			ctx.SetHeader("Retry-After", strconv.FormatInt(retryAfterSeconds, 10))
+			_ = huma.WriteErr(api, ctx, http.StatusTooManyRequests, "request limit exceeded")
+			return
+		}
+		next(ctx)
 	}
 }
 

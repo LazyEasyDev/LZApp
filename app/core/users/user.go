@@ -20,7 +20,7 @@ type User struct {
 	ID        uint64    `gorm:"primaryKey" json:"id"`
 	Name      *string   `gorm:"size:100" json:"name"`
 	Email     string    `gorm:"size:254;not null;uniqueIndex" json:"email"`
-	Password  string    `gorm:"size:128;not null" json:"-"`
+	Password  string    `gorm:"size:128;not null" json:"password"`
 	ApiToken  string    `gorm:"size:128;not null;uniqueIndex" json:"api_token"`
 	Access    string    `gorm:"type:text" json:"access"`
 	CreatedAt time.Time `json:"created_at"`
@@ -91,19 +91,6 @@ func normalizeAccess(value string) (string, error) {
 	return string(encoded), nil
 }
 
-func Create(ctx context.Context, user *User) error {
-	if user == nil {
-		return fmt.Errorf("user is required")
-	}
-	access, err := normalizeAccess(user.Access)
-	if err != nil {
-		return err
-	}
-	user.Access = access
-	database := components.GetDB()
-	return database.WithContext(ctx).Create(user).Error
-}
-
 const USER_LCACHE_SECONDS = 15
 const USER_REDIS_DURATION = 30 * time.Minute
 const USER_NOT_FOUND_LCACHE_SECONDS = 15
@@ -168,7 +155,9 @@ func GetByEmail(ctx context.Context, email string) (*User, error) {
 			if user == nil {
 				return nil, gorm.ErrRecordNotFound
 			}
-			return user, nil
+			if user.Password != "" {
+				return user, nil
+			}
 		}
 	}
 
@@ -182,8 +171,10 @@ func GetByEmail(ctx context.Context, email string) (*User, error) {
 				return nil, gorm.ErrRecordNotFound
 			}
 			// Store the user in the cache
-			LCache.Set(cache_key, user, USER_LCACHE_SECONDS)
-			return user, nil
+			if user.Password != "" {
+				LCache.Set(cache_key, user, USER_LCACHE_SECONDS)
+				return user, nil
+			}
 		}
 	}
 
@@ -303,6 +294,38 @@ func List(ctx context.Context, filter ListFilter, limit, offset int) ([]User, er
 	return users, err
 }
 
+func invalidateUserCache(ctx context.Context, user *User) error {
+	keys := []string{
+		"user:id:" + fmt.Sprint(user.ID),
+		"user:email:" + user.Email,
+		"user:api_token:" + user.ApiToken}
+	var cacheErr error
+	for _, key := range keys {
+		LCache.Delete(key)
+		cacheErr = errors.Join(cacheErr, components.GetRedis().Del(ctx, key).Err())
+	}
+	if cacheErr != nil {
+		return fmt.Errorf("user cache invalidation failed: %w", cacheErr)
+	}
+	return nil
+}
+
+func Create(ctx context.Context, user *User) error {
+	if user == nil {
+		return fmt.Errorf("user is required")
+	}
+	access, err := normalizeAccess(user.Access)
+	if err != nil {
+		return err
+	}
+	user.Access = access
+	database := components.GetDB()
+	if err := database.WithContext(ctx).Create(user).Error; err != nil {
+		return err
+	}
+	return invalidateUserCache(ctx, user)
+}
+
 func Update(ctx context.Context, user *User) error {
 	if user == nil || user.ID == 0 {
 		return fmt.Errorf("user with an ID is required")
@@ -318,31 +341,21 @@ func Update(ctx context.Context, user *User) error {
 		if err := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&previous, user.ID).Error; err != nil {
 			return err
 		}
+		updates := map[string]any{
+			"name":      user.Name,
+			"email":     user.Email,
+			"access":    user.Access,
+			"password":  user.Password,
+			"api_token": user.ApiToken,
+		}
 		return transaction.Model(&User{}).
 			Where("id = ?", user.ID).
-			Updates(map[string]any{
-				"name":   user.Name,
-				"email":  user.Email,
-				"access": user.Access,
-			}).Error
+			Updates(updates).Error
 	})
 	if err != nil {
 		return err
 	}
-	var cacheErr error
-	for _, key := range []string{
-		"user:id:" + fmt.Sprint(previous.ID),
-		"user:email:" + previous.Email,
-		"user:email:" + user.Email,
-		"user:api_token:" + previous.ApiToken,
-	} {
-		LCache.Delete(key)
-		cacheErr = errors.Join(cacheErr, components.GetRedis().Del(ctx, key).Err())
-	}
-	if cacheErr != nil {
-		return fmt.Errorf("user updated but cache invalidation failed: %w", cacheErr)
-	}
-	return nil
+	return errors.Join(invalidateUserCache(ctx, &previous), invalidateUserCache(ctx, user))
 }
 
 func Delete(ctx context.Context, id uint64) error {
@@ -361,17 +374,8 @@ func Delete(ctx context.Context, id uint64) error {
 	if err != nil {
 		return err
 	}
-	var cacheErr error
-	for _, key := range []string{
-		"user:id:" + fmt.Sprint(previous.ID),
-		"user:email:" + previous.Email,
-		"user:api_token:" + previous.ApiToken,
-	} {
-		LCache.Delete(key)
-		cacheErr = errors.Join(cacheErr, components.GetRedis().Del(ctx, key).Err())
-	}
-	if cacheErr != nil {
-		slog.Error("user deleted from db but cache deletion failed", "error", cacheErr)
+	if err := invalidateUserCache(ctx, &previous); err != nil {
+		slog.Error("user deleted from db but cache deletion failed", "error", err)
 	}
 
 	return nil

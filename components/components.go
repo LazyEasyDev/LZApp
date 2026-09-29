@@ -163,7 +163,7 @@ func InitHttpServer(httpConfig *http_config.HTTPConfig) error {
 		return fmt.Errorf("initialize HTTP server: %w", err)
 	}
 	runtime.HTTP = srv
-	slog.Info("httpserver initialized")
+	slog.Info("httpserver initialized", "https-port", httpConfig.HTTPSPort)
 	return nil
 }
 
