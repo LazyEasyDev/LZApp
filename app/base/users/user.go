@@ -255,19 +255,7 @@ type ListFilter struct {
 	Access   string
 }
 
-func List(ctx context.Context, filter ListFilter, limit, offset int) ([]User, error) {
-	database := components.GetDB()
-	if limit < 1 {
-		limit = 100
-	}
-	if limit > 1000 {
-		limit = 1000
-	}
-	if offset < 0 {
-		offset = 0
-	}
-
-	query := database.WithContext(ctx)
+func applyListFilter(query *gorm.DB, filter ListFilter) *gorm.DB {
 	if filter.ID != 0 {
 		query = query.Where("id = ?", filter.ID)
 	}
@@ -282,16 +270,36 @@ func List(ctx context.Context, filter ListFilter, limit, offset int) ([]User, er
 		query = query.Where("api_token = ?", filter.ApiToken)
 	}
 	if filter.Access != "" {
-		query = query.Where("access = ?", filter.Access)
+		query = query.Where("access LIKE ?", "%\""+escape.Replace(filter.Access)+"\"%")
+	}
+	return query
+}
+
+func List(ctx context.Context, filter ListFilter, limit, offset int) ([]User, error) {
+	if limit < 1 {
+		limit = 100
+	}
+	if limit > 1000 {
+		limit = 1000
+	}
+	if offset < 0 {
+		offset = 0
 	}
 
 	var users []User
-	err := query.
+	err := applyListFilter(components.GetDB().WithContext(ctx), filter).
+		Select("id", "name", "email", "access", "created_at", "updated_at").
 		Order("id ASC").
 		Limit(limit).
 		Offset(offset).
 		Find(&users).Error
 	return users, err
+}
+
+func Count(ctx context.Context, filter ListFilter) (int64, error) {
+	var total int64
+	err := applyListFilter(components.GetDB().WithContext(ctx).Model(&User{}), filter).Count(&total).Error
+	return total, err
 }
 
 func invalidateUserCache(ctx context.Context, user *User) error {

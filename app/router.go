@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler"
+	adminusers "github.com/LazyEasyDev/LZApp/app/base/base_api/handler/admin/users"
 	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler/docs"
 	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler/user"
 	"github.com/LazyEasyDev/LZApp/app/base/base_api/middleware"
@@ -34,6 +35,7 @@ func registerRoutes(api huma.API) {
 
 	// User routes
 	user.RegisterRoutes(api)
+	adminusers.RegisterRoutes(api)
 
 	// Additional routes can be registered here
 

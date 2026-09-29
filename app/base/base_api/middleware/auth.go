@@ -18,7 +18,14 @@ type authUserContextKey struct{}
 type authAccessContextKey struct{}
 
 func UserAuthMiddleware(api huma.API, requireAllAccessList []string) func(huma.Context, func(huma.Context)) {
-	requireAllAccessList = slices.Clone(requireAllAccessList)
+	return userAuthMiddleware(api, slices.Clone(requireAllAccessList), nil)
+}
+
+func UserAuthAnyAccessMiddleware(api huma.API, requireAnyAccessList []string) func(huma.Context, func(huma.Context)) {
+	return userAuthMiddleware(api, nil, slices.Clone(requireAnyAccessList))
+}
+
+func userAuthMiddleware(api huma.API, requireAllAccessList, requireAnyAccessList []string) func(huma.Context, func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
 		var tokens []string
 		if token, valid := bearerToken(ctx); valid && len(token) <= 128 {
@@ -52,7 +59,8 @@ func UserAuthMiddleware(api huma.API, requireAllAccessList []string) func(huma.C
 				}
 				ctx = huma.WithValue(ctx, authUserContextKey{}, &requestUser)
 				ctx = huma.WithValue(ctx, authAccessContextKey{}, accessList)
-				if !HaveAllAccess(ctx.Context(), requireAllAccessList) {
+				if len(requireAllAccessList) > 0 && !HaveAllAccess(ctx.Context(), requireAllAccessList) ||
+					len(requireAnyAccessList) > 0 && !HaveAnyAccess(ctx.Context(), requireAnyAccessList) {
 					_ = huma.WriteErr(api, ctx, http.StatusForbidden, "insufficient access")
 					return
 				}
