@@ -1,13 +1,13 @@
-package httpapi
+package app
 
 import (
 	"log/slog"
 	"net/http"
 
-	"github.com/LazyEasyDev/LZApp/app/core/httpapi/handler"
-	"github.com/LazyEasyDev/LZApp/app/core/httpapi/handler/docs"
-	"github.com/LazyEasyDev/LZApp/app/core/httpapi/handler/user"
-	"github.com/LazyEasyDev/LZApp/app/core/httpapi/middleware"
+	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler"
+	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler/docs"
+	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler/user"
+	"github.com/LazyEasyDev/LZApp/app/base/base_api/middleware"
 	huma "github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 )

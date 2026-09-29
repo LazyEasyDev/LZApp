@@ -1,4 +1,4 @@
-package httpapi
+package app
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/LazyEasyDev/LZApp/components"
 )
 
-func Start(ctx context.Context) error {
+func startHTTPServer(ctx context.Context) error {
 	http_server := components.GetHTTP()
 	if http_server == nil {
 		return fmt.Errorf("HTTP server is disabled or not initialized")

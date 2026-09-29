@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/LazyEasyDev/LZApp/app/core/users"
+	"github.com/LazyEasyDev/LZApp/app/base/users"
 	"github.com/LazyEasyDev/LZApp/config"
 	"github.com/danielgtaylor/huma/v2"
 	"gorm.io/gorm"

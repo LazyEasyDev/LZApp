@@ -7,8 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/LazyEasyDev/EasyRoutine"
-	"github.com/LazyEasyDev/LZApp/app/core/dbkv"
-	"github.com/LazyEasyDev/LZApp/app/core/httpapi"
+	"github.com/LazyEasyDev/LZApp/app/base/dbkv"
 	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/LazyEasyDev/LZApp/config"
 )
@@ -48,7 +47,7 @@ func Start(ctx context.Context, cancelAll context.CancelCauseFunc) error {
 	/////////////////start HTTP service if enabled////////////////////////////////
 	_, err := EasyRoutine.SafeGo(
 		ctx, func(taskCtx context.Context) {
-			if err := httpapi.Start(taskCtx); err != nil {
+			if err := startHTTPServer(taskCtx); err != nil {
 				cancelAll(fmt.Errorf("http service: %w", err))
 			}
 		}, func(recovered EasyRoutine.Panic, failures int) EasyRoutine.PanicDecision {

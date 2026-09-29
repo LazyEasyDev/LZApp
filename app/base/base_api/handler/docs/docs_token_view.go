@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"slices"
 
-	"github.com/LazyEasyDev/LZApp/app/core/users"
+	"github.com/LazyEasyDev/LZApp/app/base/users"
 )
 
 type DocsTokenView struct {

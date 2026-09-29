@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/LazyEasyDev/LZApp/app/core/httpapi/middleware"
-	"github.com/LazyEasyDev/LZApp/app/core/users"
+	"github.com/LazyEasyDev/LZApp/app/base/base_api/middleware"
+	"github.com/LazyEasyDev/LZApp/app/base/users"
 	"github.com/LazyEasyDev/LZApp/config"
 	"gorm.io/gorm"
 )
