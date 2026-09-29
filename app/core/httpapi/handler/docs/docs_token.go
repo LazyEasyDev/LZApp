@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/LazyEasyDev/LZApp/app/core/httpapi/middleware"
+	"github.com/LazyEasyDev/LZApp/app/core/users"
 	"github.com/LazyEasyDev/LZApp/config"
 	"gorm.io/gorm"
 )
@@ -34,6 +35,10 @@ func DocsTokenHandler(writer http.ResponseWriter, request *http.Request) {
 	account, err := middleware.ValidateUserToken(request.Context(), api_token)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		http.Error(writer, "Token unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if account != nil && !account.HaveAllAccess([]string{users.ACCESS_USER}) {
+		http.Error(writer, "User access required", http.StatusForbidden)
 		return
 	}
 	writer.Header().Set("Content-Type", "application/json")

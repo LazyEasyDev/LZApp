@@ -2,8 +2,10 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/LazyEasyDev/LZApp/app/core/users"
@@ -13,9 +15,10 @@ import (
 )
 
 type authUserContextKey struct{}
+type authAccessContextKey struct{}
 
-func UserAuthMiddleware(api huma.API) func(huma.Context, func(huma.Context)) {
-
+func UserAuthMiddleware(api huma.API, requireAllAccessList []string) func(huma.Context, func(huma.Context)) {
+	requireAllAccessList = slices.Clone(requireAllAccessList)
 	return func(ctx huma.Context, next func(huma.Context)) {
 		var tokens []string
 		if token, valid := bearerToken(ctx); valid && len(token) <= 128 {
@@ -42,7 +45,18 @@ func UserAuthMiddleware(api huma.API) func(huma.Context, func(huma.Context)) {
 			}
 			if account != nil && account.ID != 0 {
 				requestUser := *account
-				next(huma.WithValue(ctx, authUserContextKey{}, &requestUser))
+				var accessList []string
+				if err := json.Unmarshal([]byte(requestUser.Access), &accessList); err != nil || accessList == nil {
+					_ = huma.WriteErr(api, ctx, http.StatusForbidden, "invalid user access")
+					return
+				}
+				ctx = huma.WithValue(ctx, authUserContextKey{}, &requestUser)
+				ctx = huma.WithValue(ctx, authAccessContextKey{}, accessList)
+				if !HaveAllAccess(ctx.Context(), requireAllAccessList) {
+					_ = huma.WriteErr(api, ctx, http.StatusForbidden, "insufficient access")
+					return
+				}
+				next(ctx)
 				return
 			}
 		}
@@ -62,6 +76,32 @@ func ValidateUserToken(ctx context.Context, token string) (*users.User, error) {
 func GetAuthUser(ctx context.Context) (*users.User, bool) {
 	account, ok := ctx.Value(authUserContextKey{}).(*users.User)
 	return account, ok && account != nil
+}
+
+func HaveAllAccess(ctx context.Context, accessList []string) bool {
+	granted, ok := ctx.Value(authAccessContextKey{}).([]string)
+	if !ok || granted == nil {
+		return false
+	}
+	for _, access := range accessList {
+		if !slices.Contains(granted, access) {
+			return false
+		}
+	}
+	return true
+}
+
+func HaveAnyAccess(ctx context.Context, accessList []string) bool {
+	granted, ok := ctx.Value(authAccessContextKey{}).([]string)
+	if !ok || granted == nil {
+		return false
+	}
+	for _, access := range accessList {
+		if slices.Contains(granted, access) {
+			return true
+		}
+	}
+	return false
 }
 
 func bearerToken(ctx huma.Context) (string, bool) {

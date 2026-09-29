@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -113,7 +114,7 @@ func RegisterRoutes(api huma.API) {
 		Security:    []map[string][]string{{"bearerAuth": {}}, {"cookieAuth": {}}},
 		Middlewares: huma.Middlewares{
 			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 60, Window: time.Minute}),
-			middleware.UserAuthMiddleware(api),
+			middleware.UserAuthMiddleware(api, []string{users.ACCESS_USER}),
 		},
 	}, CurrentHandler)
 
@@ -211,6 +212,9 @@ func publicUser(account *users.User) users.User {
 }
 
 func signedInOutput(account *users.User) (*UserOutput, error) {
+	if !account.HaveAllAccess([]string{users.ACCESS_USER}) {
+		return nil, huma.Error403Forbidden("user access required")
+	}
 	cookie, err := tokenCookie(account.ApiToken)
 	if err != nil {
 		return nil, err
@@ -325,7 +329,8 @@ func RegisterHandler(ctx context.Context, input *RegisterInput) (*UserOutput, er
 	if err != nil {
 		return nil, huma.Error500InternalServerError("unable to generate token")
 	}
-	account := &users.User{Name: input.Body.Name, Email: email, Password: password, ApiToken: token, Access: "[]"}
+	access, _ := json.Marshal([]string{users.ACCESS_USER})
+	account := &users.User{Name: input.Body.Name, Email: email, Password: password, ApiToken: token, Access: string(access)}
 	if err := users.Create(ctx, account); err != nil {
 		return nil, huma.Error503ServiceUnavailable(err.Error())
 	}
