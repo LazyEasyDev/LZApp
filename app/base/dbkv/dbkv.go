@@ -89,7 +89,7 @@ func initWithInterval(ctx context.Context, connection *gorm.DB, interval time.Du
 			case <-taskCtx.Done():
 				return
 			case <-ticker.C:
-				if err := refresh(taskCtx); err != nil && taskCtx.Err() == nil {
+				if err := Refresh(taskCtx); err != nil && taskCtx.Err() == nil {
 					slog.Error("refresh dbkv cache", "error", err)
 				}
 			}
@@ -125,7 +125,7 @@ func Close() {
 	slog.Info("dbkv store closed")
 }
 
-func refresh(ctx context.Context) error {
+func Refresh(ctx context.Context) error {
 	marker, err := getFromDatabase(ctx, LastUpdatedKey)
 	if err != nil {
 		return err
@@ -181,26 +181,43 @@ func validateName(name string) error {
 	return nil
 }
 
-func Set(ctx context.Context, name string, value any, description string) error {
+func newEntry(name string, value any, description string) (*Entry, error) {
 	// Normalize the key name: trim spaces and convert to lowercase
 	name = strings.TrimSpace(name)
 	if err := validateName(name); err != nil {
-		return err
+		return nil, err
 	}
 	name = strings.ToLower(name)
 	if name == LastUpdatedKey {
-		return fmt.Errorf("key %q is reserved", name)
+		return nil, fmt.Errorf("key %q is reserved", name)
 	}
 	// Encode the value as JSON
 	encoded, err := json.Marshal(value)
 	if err != nil {
-		return fmt.Errorf("encode value for %q as JSON: %w", name, err)
+		return nil, fmt.Errorf("encode value for %q as JSON: %w", name, err)
 	}
 	// Create the entry with the encoded value and description
-	entry := Entry{Key: name, Value: string(encoded), Description: description, Visible: true}
+	return &Entry{Key: name, Value: string(encoded), Description: description, Visible: true}, nil
+}
+
+func Set(ctx context.Context, name string, value any, description string) error {
+	entry, err := newEntry(name, value, description)
+	if err != nil {
+		return err
+	}
 
 	return withUpdateMarker(ctx, func(transaction *gorm.DB) error {
-		return upsertEntry(transaction, &entry)
+		return upsertEntry(transaction, entry)
+	})
+}
+
+func Create(ctx context.Context, name string, value any, description string) error {
+	entry, err := newEntry(name, value, description)
+	if err != nil {
+		return err
+	}
+	return withUpdateMarker(ctx, func(transaction *gorm.DB) error {
+		return transaction.Create(entry).Error
 	})
 }
 

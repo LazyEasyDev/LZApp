@@ -60,8 +60,10 @@ type CreateInput struct {
 }
 
 type UpdateInput struct {
-	ID   uint64 `path:"id" minimum:"1"`
-	Body UserBody
+	Body struct {
+		ID uint64 `json:"id" minimum:"1"`
+		UserBody
+	}
 }
 
 type UserOutput struct {
@@ -80,33 +82,30 @@ func RegisterRoutes(api huma.API) {
 	}
 
 	huma.Register(api, huma.Operation{
-		OperationID: "get-admin-users",
+		OperationID: "get-admin-users-list",
 		Summary:     "List users",
 		Method:      http.MethodGet,
-		Path:        "/admin/users",
+		Path:        "/admin/users/list",
 		Tags:        []string{"Admin users"},
-		Security:    []map[string][]string{{"bearerAuth": {}}, {"cookieAuth": {}}},
 		Middlewares: readMiddleware,
 	}, ListHandler)
 
 	huma.Register(api, huma.Operation{
-		OperationID:   "post-admin-user",
+		OperationID:   "post-admin-users-create",
 		Summary:       "Create user",
 		Method:        http.MethodPost,
-		Path:          "/admin/users",
+		Path:          "/admin/users/create",
 		Tags:          []string{"Admin users"},
 		DefaultStatus: http.StatusCreated,
-		Security:      []map[string][]string{{"bearerAuth": {}}, {"cookieAuth": {}}},
 		Middlewares:   writeMiddleware,
 	}, CreateHandler)
 
 	huma.Register(api, huma.Operation{
-		OperationID: "post-admin-user-update",
+		OperationID: "post-admin-users-update",
 		Summary:     "Update user",
 		Method:      http.MethodPost,
-		Path:        "/admin/users/{id}",
+		Path:        "/admin/users/update",
 		Tags:        []string{"Admin users"},
-		Security:    []map[string][]string{{"bearerAuth": {}}, {"cookieAuth": {}}},
 		Middlewares: writeMiddleware,
 	}, UpdateHandler)
 }
@@ -182,7 +181,7 @@ func CreateHandler(ctx context.Context, input *CreateInput) (*UserOutput, error)
 }
 
 func UpdateHandler(ctx context.Context, input *UpdateInput) (*UserOutput, error) {
-	account, err := accounts.GetByID(ctx, input.ID)
+	account, err := accounts.GetByID(ctx, input.Body.ID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, huma.Error404NotFound("user not found")
 	}

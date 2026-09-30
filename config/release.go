@@ -7,7 +7,7 @@ var releaseAppConfig = func() AppConfig {
 	// Logging configuration for release environment
 	appConfig.Log.ToTerminal = true
 	appConfig.Log.AddSource = false
-	appConfig.Log.Level = "info"
+	appConfig.Log.Level = "silent"
 
 	//
 	appConfig.SecurityHMAC.HMACKey = "lzapp-release-hmac-key"
@@ -17,7 +17,7 @@ var releaseAppConfig = func() AppConfig {
 	appConfig.DB.User = "lzapp"
 	appConfig.DB.Password = "lzapp-release-password"
 	appConfig.DB.Charset = "utf8mb4"
-	appConfig.DB.LogLevel = "warn"
+	appConfig.DB.LogLevel = "silent"
 
 	// Redis configuration for release environment
 

@@ -111,7 +111,6 @@ func RegisterRoutes(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/user",
 		Tags:        []string{"User"},
-		Security:    []map[string][]string{{"bearerAuth": {}}, {"cookieAuth": {}}},
 		Middlewares: huma.Middlewares{
 			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 60, Window: time.Minute}),
 			middleware.UserAuthMiddleware(api, []string{users.ACCESS_USER}),
@@ -124,6 +123,7 @@ func RegisterRoutes(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/user/captcha",
 		Tags:        []string{"User"},
+		Security:    []map[string][]string{},
 		Middlewares: huma.Middlewares{
 			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 60, Window: time.Minute}),
 		},
@@ -135,6 +135,7 @@ func RegisterRoutes(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/user/login",
 		Tags:        []string{"User"},
+		Security:    []map[string][]string{},
 		Middlewares: huma.Middlewares{
 			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 20, Window: time.Minute}),
 		},
@@ -146,6 +147,7 @@ func RegisterRoutes(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/user/register",
 		Tags:        []string{"User"},
+		Security:    []map[string][]string{},
 		Middlewares: huma.Middlewares{
 			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 10, Window: time.Minute}),
 		},
@@ -157,6 +159,7 @@ func RegisterRoutes(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/user/reset_password",
 		Tags:        []string{"User"},
+		Security:    []map[string][]string{},
 		Middlewares: huma.Middlewares{
 			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 10, Window: time.Minute}),
 		},
@@ -168,6 +171,7 @@ func RegisterRoutes(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/user/email_code",
 		Tags:        []string{"User"},
+		Security:    []map[string][]string{},
 		Middlewares: huma.Middlewares{
 			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 5, Window: time.Minute}),
 		},
@@ -179,6 +183,7 @@ func RegisterRoutes(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/user/logout",
 		Tags:        []string{"User"},
+		Security:    []map[string][]string{},
 	}, LogoutHandler)
 }
 

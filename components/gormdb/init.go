@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"net"
 	"time"
 
@@ -39,7 +40,7 @@ func New(ctx context.Context, dbConfig *db_config.DBConfig) (*gorm.DB, error) {
 	}
 
 	database, err := gorm.Open(mysql.Open(dataSourceName(dbConfig)), &gorm.Config{
-		Logger: gormlogger.Default.LogMode(logMode),
+		Logger: newLogger(logMode),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open MySQL: %w", err)
@@ -59,6 +60,14 @@ func New(ctx context.Context, dbConfig *db_config.DBConfig) (*gorm.DB, error) {
 		return nil, fmt.Errorf("ping MySQL: %w", err)
 	}
 	return database, nil
+}
+
+func newLogger(level gormlogger.LogLevel) gormlogger.Interface {
+	return gormlogger.NewSlogLogger(slog.Default(), gormlogger.Config{
+		LogLevel:             level,
+		SlowThreshold:        200 * time.Millisecond,
+		ParameterizedQueries: true,
+	})
 }
 
 func Close(database *gorm.DB) error {

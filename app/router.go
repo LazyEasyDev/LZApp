@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler"
+	admindbkv "github.com/LazyEasyDev/LZApp/app/base/base_api/handler/admin/dbkv"
 	adminusers "github.com/LazyEasyDev/LZApp/app/base/base_api/handler/admin/users"
 	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler/docs"
 	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler/user"
@@ -31,11 +32,14 @@ func registerRoutes(api huma.API) {
 
 	// Health check route
 	slog.Debug("Registering health route")
-	huma.Get(api, "/health", handler.HealthHandler)
+	huma.Get(api, "/health", handler.HealthHandler, func(operation *huma.Operation) {
+		operation.Security = []map[string][]string{}
+	})
 
 	// User routes
 	user.RegisterRoutes(api)
 	adminusers.RegisterRoutes(api)
+	admindbkv.RegisterRoutes(api)
 
 	// Additional routes can be registered here
 

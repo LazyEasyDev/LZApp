@@ -95,7 +95,7 @@ func New(httpConfig *http_config.HTTPConfig) (*Server, error) {
 			Name: httpConfig.APITokenCookieName,
 		},
 	}
-	apiConfig.Security = []map[string][]string{{"bearerAuth": {}}, {}}
+	apiConfig.Security = []map[string][]string{{"bearerAuth": {}}, {"cookieAuth": {}}}
 	apiConfig.CreateHooks = nil
 	apiConfig.SchemasPath = ""
 	apiConfig.DocsPath = ""
