@@ -39,13 +39,15 @@ func newDefaultConfig() AppConfig {
 			DirectoryRelative: "app",
 			ToTerminal:        true,
 			ShowLogTail:       10,
+			AddSource:         false,
+			Level:             "info",
 		},
 		Cache: &lcache_config.LocalCacheConfig{
 			MaxTTLSeconds: 24 * 60 * 60,
 		},
 		SecurityHMAC: &security_config.SecurityHMACConfig{
 			HMACKey:        "",
-			HMACTokenBytes: 32,
+			HMACTokenBytes: 16,
 		},
 		SecurityBcrypt: &security_config.SecurityBcryptConfig{
 			Cost: 10,
@@ -53,7 +55,7 @@ func newDefaultConfig() AppConfig {
 		////optional
 		HTTP: &http_config.HTTPConfig{
 			APITokenCookieName:       "api_token",
-			HTTPSPort:                8443,
+			HTTPSPort:                443,
 			HTTPSCertificate:         http_config.HTTPSCertificatePEM,
 			HTTPSKey:                 http_config.HTTPSPrivateKeyPEM,
 			ReadHeaderTimeoutSeconds: 10,
@@ -65,7 +67,8 @@ func newDefaultConfig() AppConfig {
 		DB: &db_config.DBConfig{
 			Host:     "127.0.0.1",
 			Port:     3306,
-			LogLevel: "warn",
+			LogLevel: "silent",
+			Charset:  "utf8mb4",
 		},
 		Email: &email_config.EmailConfig{
 			Port:           587,
@@ -75,13 +78,9 @@ func newDefaultConfig() AppConfig {
 			ClusterMode:         true,
 			TLS:                 true,
 			InsecureSkipVerify:  true,
-			Addrs:               []string{"127.0.0.1:7001"},
-			Username:            "lzapp",
-			KeyPrefix:           "lzapp:",
-			Password:            "b9b07f4ad4a526f0bda7794fbaa922fcec22cdf737718363c08e48f978bf2071",
-			DialTimeoutSeconds:  5,
-			ReadTimeoutSeconds:  3,
-			WriteTimeoutSeconds: 3,
+			DialTimeoutSeconds:  6,
+			ReadTimeoutSeconds:  5,
+			WriteTimeoutSeconds: 5,
 		},
 	}
 }
