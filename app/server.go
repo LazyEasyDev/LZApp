@@ -14,7 +14,7 @@ func startHTTPServer(ctx context.Context) error {
 		return fmt.Errorf("HTTP server is disabled or not initialized")
 	}
 	// register the HTTP routes
-	slog.Info("Registering HTTP routes")
+	slog.Info("Registering HTTP routes......")
 	registerRoutes(http_server.API())
 	// start the HTTP service
 	slog.Info("Starting HTTP service")

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/LazyEasyDev/LZApp/app/base/base_api/middleware"
+	"github.com/danielgtaylor/huma/v2"
 )
 
 type HealthOutput struct {
@@ -19,4 +20,9 @@ func HealthHandler(ctx context.Context, req *struct{}) (*HealthOutput, error) {
 	response.Body.RemoteIp = middleware.GetClientIP(ctx) // You can set this to the actual remote IP if available
 	response.Body.ServerUnixTime = time.Now().Unix()
 	return response, nil
+}
+func RegisterHealthRoutes(api huma.API) {
+	huma.Get(api, "/health", HealthHandler, func(operation *huma.Operation) {
+		operation.Security = []map[string][]string{}
+	})
 }

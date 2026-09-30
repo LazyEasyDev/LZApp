@@ -16,6 +16,18 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+func RegisterRoutes(api huma.API) {
+	docsHandler := NewDocsHandler(api)
+	api.Adapter().Handle(&huma.Operation{Method: http.MethodGet, Path: "/docs"}, func(ctx huma.Context) {
+		request, writer := humachi.Unwrap(ctx)
+		docsHandler.ServeHTTP(writer, request)
+	})
+	api.Adapter().Handle(&huma.Operation{Method: http.MethodPost, Path: "/docs_token"}, func(ctx huma.Context) {
+		request, writer := humachi.Unwrap(ctx)
+		DocsTokenHandler(writer, request)
+	})
+}
+
 //go:embed docs_auth.js
 var docsAuthScript string
 
