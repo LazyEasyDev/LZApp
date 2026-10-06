@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log/slog"
 	"slices"
 	"strings"
 	"time"
 
-	"github.com/LazyEasyDev/LCache"
+	"github.com/LazyEasyDev/LZApp/app/data"
 	"github.com/LazyEasyDev/LZApp/components"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -91,160 +90,58 @@ func normalizeAccess(value string) (string, error) {
 	return string(encoded), nil
 }
 
-const USER_LCACHE_SECONDS = 15
-const USER_REDIS_DURATION = 30 * time.Minute
-const USER_NOT_FOUND_LCACHE_SECONDS = 15
-const USER_NOT_FOUND_REDIS_DURATION = 1 * time.Minute
-
-func GetByID(ctx context.Context, id uint64) (*User, error) {
-
-	cache_key := "user:id:" + fmt.Sprint(id)
-
-	// Try to get the user from the cache first
-	if cached, found := LCache.Get(cache_key); found {
-		if user, ok := cached.(*User); ok {
-			if user == nil {
-				return nil, gorm.ErrRecordNotFound
-			}
-			return user, nil
-		}
-	}
-
-	// If not found in the cache, fetch from the Redis
-	redis_user_str, err := components.GetRedis().Get(ctx, cache_key).Result()
-	if err == nil {
-		var user *User
-		if err := json.Unmarshal([]byte(redis_user_str), &user); err == nil {
-			if user == nil {
-				LCache.Set(cache_key, (*User)(nil), USER_NOT_FOUND_LCACHE_SECONDS)
-				return nil, gorm.ErrRecordNotFound
-			}
-			// Store the user in the cache
-			LCache.Set(cache_key, user, USER_LCACHE_SECONDS)
-			return user, nil
-		}
-	}
-
-	// Store the user in the cache after fetching from the database
-	database := components.GetDB()
-	var user User
-	if err := database.WithContext(ctx).First(&user, id).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			LCache.Set(cache_key, (*User)(nil), USER_NOT_FOUND_LCACHE_SECONDS)
-			components.GetRedis().Set(ctx, cache_key, "null", USER_NOT_FOUND_REDIS_DURATION)
-		}
-		return nil, err
-	}
-
-	// Store the user in the cache
-	LCache.Set(cache_key, &user, USER_LCACHE_SECONDS)
-	// Also store the user in Redis for future requests
-	redis_user_bytes, _ := json.Marshal(&user)
-	components.GetRedis().Set(ctx, cache_key, redis_user_bytes, USER_REDIS_DURATION)
-
-	return &user, nil
+func GetByID(ctx context.Context, id uint64) (*User, bool, error) {
+	return getByID(ctx, id, components.GetDB(), components.GetRedis(), false)
 }
 
-func GetByEmail(ctx context.Context, email string) (*User, error) {
-
-	cache_key := "user:email:" + email
-
-	// Try to get the user from the cache first
-	if cached, found := LCache.Get(cache_key); found {
-		if user, ok := cached.(*User); ok {
-			if user == nil {
-				return nil, gorm.ErrRecordNotFound
-			}
-			if user.Password != "" {
-				return user, nil
-			}
-		}
-	}
-
-	// If not found in the cache, fetch from the Redis
-	redis_user_str, err := components.GetRedis().Get(ctx, cache_key).Result()
-	if err == nil {
-		var user *User
-		if err := json.Unmarshal([]byte(redis_user_str), &user); err == nil {
-			if user == nil {
-				LCache.Set(cache_key, (*User)(nil), USER_NOT_FOUND_LCACHE_SECONDS)
-				return nil, gorm.ErrRecordNotFound
-			}
-			// Store the user in the cache
-			if user.Password != "" {
-				LCache.Set(cache_key, user, USER_LCACHE_SECONDS)
-				return user, nil
-			}
-		}
-	}
-
-	// Store the user in the cache after fetching from the database
-	database := components.GetDB()
-	var user User
-	if err := database.WithContext(ctx).Where("email = ?", email).First(&user).Error; err != nil {
+func getByID(ctx context.Context, id uint64, database *gorm.DB, cache data.RedisCache, forceUpdate bool) (*User, bool, error) {
+	return data.GetRLCached(ctx, "user:id:"+fmt.Sprint(id), cache, forceUpdate, func(ctx context.Context) (*User, bool, error) {
+		var user User
+		err := database.WithContext(ctx).First(&user, id).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			LCache.Set(cache_key, (*User)(nil), USER_NOT_FOUND_LCACHE_SECONDS)
-			components.GetRedis().Set(ctx, cache_key, "null", USER_NOT_FOUND_REDIS_DURATION)
+			return nil, true, nil
 		}
-		return nil, err
-	}
-
-	// Store the user in the cache
-	LCache.Set(cache_key, &user, USER_LCACHE_SECONDS)
-	// Also store the user in Redis for future requests
-	redis_user_bytes, _ := json.Marshal(&user)
-	components.GetRedis().Set(ctx, cache_key, redis_user_bytes, USER_REDIS_DURATION)
-
-	return &user, nil
+		if err != nil {
+			return nil, false, err
+		}
+		return &user, false, nil
+	})
 }
 
-func GetByApiToken(ctx context.Context, api_token string) (*User, error) {
+func GetByEmail(ctx context.Context, email string) (*User, bool, error) {
+	return getByEmail(ctx, email, components.GetDB(), components.GetRedis(), false)
+}
 
-	cache_key := "user:api_token:" + api_token
-
-	// Try to get the user from the cache first
-	if cached, found := LCache.Get(cache_key); found {
-		if user, ok := cached.(*User); ok {
-			if user == nil {
-				return nil, gorm.ErrRecordNotFound
-			}
-			return user, nil
-		}
-	}
-
-	// If not found in the cache, fetch from the Redis
-	redis_user_str, err := components.GetRedis().Get(ctx, cache_key).Result()
-	if err == nil {
-		var user *User
-		if err := json.Unmarshal([]byte(redis_user_str), &user); err == nil {
-			if user == nil {
-				LCache.Set(cache_key, (*User)(nil), USER_NOT_FOUND_LCACHE_SECONDS)
-				return nil, gorm.ErrRecordNotFound
-			}
-			// Store the user in the cache
-			LCache.Set(cache_key, user, USER_LCACHE_SECONDS)
-			return user, nil
-		}
-	}
-
-	// Store the user in the cache after fetching from the database
-	database := components.GetDB()
-	var user User
-	if err := database.WithContext(ctx).Where("api_token = ?", api_token).First(&user).Error; err != nil {
+func getByEmail(ctx context.Context, email string, database *gorm.DB, cache data.RedisCache, forceUpdate bool) (*User, bool, error) {
+	return data.GetRLCached(ctx, "user:email:"+email, cache, forceUpdate, func(ctx context.Context) (*User, bool, error) {
+		var user User
+		err := database.WithContext(ctx).Where("email = ?", email).First(&user).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			LCache.Set(cache_key, (*User)(nil), USER_NOT_FOUND_LCACHE_SECONDS)
-			components.GetRedis().Set(ctx, cache_key, "null", USER_NOT_FOUND_REDIS_DURATION)
+			return nil, true, nil
 		}
-		return nil, err
-	}
+		if err != nil {
+			return nil, false, err
+		}
+		return &user, false, nil
+	})
+}
 
-	// Store the user in the cache
-	LCache.Set(cache_key, &user, USER_LCACHE_SECONDS)
-	// Also store the user in Redis for future requests
-	redis_user_bytes, _ := json.Marshal(&user)
-	components.GetRedis().Set(ctx, cache_key, redis_user_bytes, USER_REDIS_DURATION)
+func GetByApiToken(ctx context.Context, api_token string) (*User, bool, error) {
+	return getByApiToken(ctx, api_token, components.GetDB(), components.GetRedis(), false)
+}
 
-	return &user, nil
+func getByApiToken(ctx context.Context, apiToken string, database *gorm.DB, cache data.RedisCache, forceUpdate bool) (*User, bool, error) {
+	return data.GetRLCached(ctx, "user:api_token:"+apiToken, cache, forceUpdate, func(ctx context.Context) (*User, bool, error) {
+		var user User
+		err := database.WithContext(ctx).Where("api_token = ?", apiToken).First(&user).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, true, nil
+		}
+		if err != nil {
+			return nil, false, err
+		}
+		return &user, false, nil
+	})
 }
 
 type ListFilter struct {
@@ -302,23 +199,31 @@ func Count(ctx context.Context, filter ListFilter) (int64, error) {
 	return total, err
 }
 
-func invalidateUserCache(ctx context.Context, user *User) error {
-	keys := []string{
-		"user:id:" + fmt.Sprint(user.ID),
-		"user:email:" + user.Email,
-		"user:api_token:" + user.ApiToken}
-	var cacheErr error
-	for _, key := range keys {
-		LCache.Delete(key)
-		cacheErr = errors.Join(cacheErr, components.GetRedis().Del(ctx, key).Err())
+func refreshUserCache(ctx context.Context, database *gorm.DB, cache data.RedisCache, users ...*User) {
+	ids := make(map[uint64]bool)
+	emails := make(map[string]bool)
+	tokens := make(map[string]bool)
+	for _, user := range users {
+		if !ids[user.ID] {
+			ids[user.ID] = true
+			_, _, _ = getByID(ctx, user.ID, database, cache, true)
+		}
+		if !emails[user.Email] {
+			emails[user.Email] = true
+			_, _, _ = getByEmail(ctx, user.Email, database, cache, true)
+		}
+		if !tokens[user.ApiToken] {
+			tokens[user.ApiToken] = true
+			_, _, _ = getByApiToken(ctx, user.ApiToken, database, cache, true)
+		}
 	}
-	if cacheErr != nil {
-		return fmt.Errorf("user cache invalidation failed: %w", cacheErr)
-	}
-	return nil
 }
 
 func Create(ctx context.Context, user *User) error {
+	return create(ctx, user, components.GetDB(), components.GetRedis())
+}
+
+func create(ctx context.Context, user *User, database *gorm.DB, cache data.RedisCache) error {
 	if user == nil {
 		return fmt.Errorf("user is required")
 	}
@@ -327,14 +232,18 @@ func Create(ctx context.Context, user *User) error {
 		return err
 	}
 	user.Access = access
-	database := components.GetDB()
 	if err := database.WithContext(ctx).Create(user).Error; err != nil {
 		return err
 	}
-	return invalidateUserCache(ctx, user)
+	refreshUserCache(ctx, database, cache, user)
+	return nil
 }
 
 func Update(ctx context.Context, user *User) error {
+	return update(ctx, user, components.GetDB(), components.GetRedis())
+}
+
+func update(ctx context.Context, user *User, database *gorm.DB, cache data.RedisCache) error {
 	if user == nil || user.ID == 0 {
 		return fmt.Errorf("user with an ID is required")
 	}
@@ -343,7 +252,6 @@ func Update(ctx context.Context, user *User) error {
 		return err
 	}
 	user.Access = access
-	database := components.GetDB()
 	var previous User
 	err = database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
 		if err := transaction.Clauses(clause.Locking{Strength: "UPDATE"}).First(&previous, user.ID).Error; err != nil {
@@ -363,14 +271,18 @@ func Update(ctx context.Context, user *User) error {
 	if err != nil {
 		return err
 	}
-	return errors.Join(invalidateUserCache(ctx, &previous), invalidateUserCache(ctx, user))
+	refreshUserCache(ctx, database, cache, &previous, user)
+	return nil
 }
 
 func Delete(ctx context.Context, id uint64) error {
+	return deleteUser(ctx, id, components.GetDB(), components.GetRedis())
+}
+
+func deleteUser(ctx context.Context, id uint64, database *gorm.DB, cache data.RedisCache) error {
 	if id == 0 {
 		return fmt.Errorf("user ID is required")
 	}
-	database := components.GetDB()
 
 	var previous User
 	err := database.WithContext(ctx).Transaction(func(transaction *gorm.DB) error {
@@ -382,9 +294,7 @@ func Delete(ctx context.Context, id uint64) error {
 	if err != nil {
 		return err
 	}
-	if err := invalidateUserCache(ctx, &previous); err != nil {
-		slog.Error("user deleted from db but cache deletion failed", "error", err)
-	}
+	refreshUserCache(ctx, database, cache, &previous)
 
 	return nil
 }

@@ -3,7 +3,6 @@ package middleware
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"slices"
 	"strings"
@@ -11,7 +10,6 @@ import (
 	"github.com/LazyEasyDev/LZApp/app/base/users"
 	"github.com/LazyEasyDev/LZApp/config"
 	"github.com/danielgtaylor/huma/v2"
-	"gorm.io/gorm"
 )
 
 type authUserContextKey struct{}
@@ -45,9 +43,12 @@ func userAuthMiddleware(api huma.API, requireAllAccessList, requireAnyAccessList
 		}
 		var lookupFailed bool
 		for _, token := range tokens {
-			account, err := ValidateUserToken(ctx.Context(), token)
+			account, notFound, err := ValidateUserToken(ctx.Context(), token)
 			if err != nil {
-				lookupFailed = lookupFailed || !errors.Is(err, gorm.ErrRecordNotFound)
+				lookupFailed = true
+				continue
+			}
+			if notFound {
 				continue
 			}
 			if account != nil && account.ID != 0 {
@@ -77,7 +78,7 @@ func userAuthMiddleware(api huma.API, requireAllAccessList, requireAnyAccessList
 	}
 }
 
-func ValidateUserToken(ctx context.Context, token string) (*users.User, error) {
+func ValidateUserToken(ctx context.Context, token string) (*users.User, bool, error) {
 	return users.GetByApiToken(ctx, token)
 }
 

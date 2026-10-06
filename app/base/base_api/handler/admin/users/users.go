@@ -181,12 +181,12 @@ func CreateHandler(ctx context.Context, input *CreateInput) (*UserOutput, error)
 }
 
 func UpdateHandler(ctx context.Context, input *UpdateInput) (*UserOutput, error) {
-	account, err := accounts.GetByID(ctx, input.Body.ID)
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, huma.Error404NotFound("user not found")
-	}
+	account, notFound, err := accounts.GetByID(ctx, input.Body.ID)
 	if err != nil {
 		return nil, huma.Error503ServiceUnavailable("user update is unavailable")
+	}
+	if notFound {
+		return nil, huma.Error404NotFound("user not found")
 	}
 	email, err := normalizeEmail(input.Body.Email)
 	if err != nil {

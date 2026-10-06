@@ -3,6 +3,7 @@ module github.com/LazyEasyDev/LZApp
 go 1.25.13
 
 require (
+	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/LazyEasyDev/EasyLog v0.0.0-20260925132759-daa542d7b335
 	github.com/LazyEasyDev/EasyRoutine v0.0.0-20260919064601-ef0bc1c54658
 	github.com/LazyEasyDev/LCache v0.0.0-20260925132634-24d66f65bb9c
@@ -14,6 +15,7 @@ require (
 	github.com/urfave/cli/v3 v3.12.0
 	github.com/wneessen/go-mail v0.8.1
 	golang.org/x/crypto v0.54.0
+	golang.org/x/sync v0.22.0
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/gorm v1.31.2
 )

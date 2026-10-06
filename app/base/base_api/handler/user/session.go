@@ -23,7 +23,6 @@ import (
 	"github.com/LazyEasyDev/LZApp/config"
 	"github.com/danielgtaylor/huma/v2"
 	goredis "github.com/redis/go-redis/v9"
-	"gorm.io/gorm"
 )
 
 const emailCodeTTL = 10 * time.Minute
@@ -298,12 +297,12 @@ func LoginHandler(ctx context.Context, input *LoginInput) (*UserOutput, error) {
 	if err != nil {
 		return nil, err
 	}
-	account, err := users.GetByEmail(ctx, email)
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, huma.Error401Unauthorized("invalid email or password")
-	}
+	account, notFound, err := users.GetByEmail(ctx, email)
 	if err != nil {
 		return nil, huma.Error503ServiceUnavailable("login is unavailable")
+	}
+	if notFound {
+		return nil, huma.Error401Unauthorized("invalid email or password")
 	}
 	valid, err := components.GetPasswordHasher().VerifyPassword(input.Body.Password, account.Password)
 	if err != nil || !valid {
@@ -356,12 +355,12 @@ func ResetPasswordHandler(ctx context.Context, input *ResetPasswordInput) (*Mess
 	if err := verifyEmailCode(ctx, email, "reset_password", input.Body.EmailCode); err != nil {
 		return nil, err
 	}
-	account, err := users.GetByEmail(ctx, email)
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, huma.Error400BadRequest("unable to reset password")
-	}
+	account, notFound, err := users.GetByEmail(ctx, email)
 	if err != nil {
 		return nil, huma.Error503ServiceUnavailable("password reset is unavailable")
+	}
+	if notFound {
+		return nil, huma.Error400BadRequest("unable to reset password")
 	}
 	password, err := components.GetPasswordHasher().HashPassword(input.Body.NewPassword)
 	if err != nil {
