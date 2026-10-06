@@ -15,6 +15,21 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
+const (
+	maxIdleConns    = 5
+	maxOpenConns    = 25
+	connMaxIdleTime = 5 * time.Minute
+	connMaxLifetime = 30 * time.Minute
+
+	slowQueryThreshold = 200 * time.Millisecond
+
+	dialTimeout  = 5 * time.Second
+	readTimeout  = 30 * time.Second
+	writeTimeout = 30 * time.Second
+
+	defaultLogMode = gormlogger.Warn
+)
+
 func New(ctx context.Context, dbConfig *db_config.DBConfig) (*gorm.DB, error) {
 
 	if ctx == nil {
@@ -25,7 +40,7 @@ func New(ctx context.Context, dbConfig *db_config.DBConfig) (*gorm.DB, error) {
 		return nil, fmt.Errorf("database configuration is required")
 	}
 
-	logMode := gormlogger.Warn
+	logMode := defaultLogMode
 	switch dbConfig.LogLevel {
 	case "silent":
 		logMode = gormlogger.Silent
@@ -36,7 +51,7 @@ func New(ctx context.Context, dbConfig *db_config.DBConfig) (*gorm.DB, error) {
 	case "info":
 		logMode = gormlogger.Info
 	default:
-		logMode = gormlogger.Warn
+		logMode = defaultLogMode
 	}
 
 	database, err := gorm.Open(mysql.Open(dataSourceName(dbConfig)), &gorm.Config{
@@ -50,10 +65,10 @@ func New(ctx context.Context, dbConfig *db_config.DBConfig) (*gorm.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get SQL database: %w", err)
 	}
-	sqlDB.SetMaxIdleConns(5)
-	sqlDB.SetMaxOpenConns(25)
-	sqlDB.SetConnMaxIdleTime(5 * time.Minute)
-	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+	sqlDB.SetMaxIdleConns(maxIdleConns)
+	sqlDB.SetMaxOpenConns(maxOpenConns)
+	sqlDB.SetConnMaxIdleTime(connMaxIdleTime)
+	sqlDB.SetConnMaxLifetime(connMaxLifetime)
 
 	if err := sqlDB.PingContext(ctx); err != nil {
 		_ = sqlDB.Close()
@@ -65,7 +80,7 @@ func New(ctx context.Context, dbConfig *db_config.DBConfig) (*gorm.DB, error) {
 func newLogger(level gormlogger.LogLevel) gormlogger.Interface {
 	return gormlogger.NewSlogLogger(slog.Default(), gormlogger.Config{
 		LogLevel:             level,
-		SlowThreshold:        200 * time.Millisecond,
+		SlowThreshold:        slowQueryThreshold,
 		ParameterizedQueries: true,
 	})
 }
@@ -98,9 +113,9 @@ func dataSourceName(dbConfig *db_config.DBConfig) string {
 	driverConfig.DBName = dbConfig.DBName
 	driverConfig.ParseTime = true
 	driverConfig.Loc = time.UTC
-	driverConfig.Timeout = 5 * time.Second
-	driverConfig.ReadTimeout = 10 * time.Second
-	driverConfig.WriteTimeout = 10 * time.Second
+	driverConfig.Timeout = dialTimeout
+	driverConfig.ReadTimeout = readTimeout
+	driverConfig.WriteTimeout = writeTimeout
 	driverConfig.Params = map[string]string{"charset": dbConfig.Charset}
 	return driverConfig.FormatDSN()
 }
