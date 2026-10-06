@@ -6,14 +6,9 @@ import (
 	"time"
 
 	"github.com/LazyEasyDev/LCache"
-	goredis "github.com/redis/go-redis/v9"
+	"github.com/LazyEasyDev/LZApp/components/redis"
 	"golang.org/x/sync/singleflight"
 )
-
-type RedisCache interface {
-	Get(context.Context, string) *goredis.StringCmd
-	Set(context.Context, string, any, time.Duration) *goredis.StatusCmd
-}
 
 type LCacheTTL struct {
 	LocalSeconds         int64
@@ -63,14 +58,14 @@ type cacheLookup[T any] struct {
 // Both load and GetRLCached return (record, false, nil) when found,
 // (nil, true, nil) when not found, or (nil, false, err) on failure.
 // forceUpdate bypasses cache reads and singleflight, then refreshes both caches.
-func GetRLCached[T any](ctx context.Context, key string, cache RedisCache, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
+func GetRLCached[T any](ctx context.Context, key string, cache *redis.Client, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
 	return GetRLCachedWithTTL(ctx, key, cache, DefaultRLCacheTTL(), forceUpdate, load)
 }
 
 // GetRLCachedWithTTL uses Redis (R) and local cache (L) with TTLs in seconds.
 // It has the same lookup and forceUpdate behavior as GetRLCached, including JSON
 // encoding and decoding for Redis values and JSON null for missing records.
-func GetRLCachedWithTTL[T any](ctx context.Context, key string, cache RedisCache, ttl RLCacheTTL, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
+func GetRLCachedWithTTL[T any](ctx context.Context, key string, cache *redis.Client, ttl RLCacheTTL, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
 	return getCachedWithTTL(ctx, key, cache, ttl, forceUpdate, load)
 }
 
@@ -93,7 +88,7 @@ func GetLCachedWithTTL[T any](ctx context.Context, key string, ttl LCacheTTL, fo
 	}, forceUpdate, load)
 }
 
-func getCachedWithTTL[T any](ctx context.Context, key string, cache RedisCache, ttl RLCacheTTL, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
+func getCachedWithTTL[T any](ctx context.Context, key string, cache *redis.Client, ttl RLCacheTTL, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}

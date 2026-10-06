@@ -11,6 +11,7 @@ import (
 
 	"github.com/LazyEasyDev/LZApp/app/data"
 	"github.com/LazyEasyDev/LZApp/components"
+	"github.com/LazyEasyDev/LZApp/components/redis"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -94,7 +95,7 @@ func GetByID(ctx context.Context, id uint64) (*User, bool, error) {
 	return getByID(ctx, id, components.GetDB(), components.GetRedis(), false)
 }
 
-func getByID(ctx context.Context, id uint64, database *gorm.DB, cache data.RedisCache, forceUpdate bool) (*User, bool, error) {
+func getByID(ctx context.Context, id uint64, database *gorm.DB, cache *redis.Client, forceUpdate bool) (*User, bool, error) {
 	return data.GetRLCached(ctx, "user:id:"+fmt.Sprint(id), cache, forceUpdate, func(ctx context.Context) (*User, bool, error) {
 		var user User
 		err := database.WithContext(ctx).First(&user, id).Error
@@ -112,7 +113,7 @@ func GetByEmail(ctx context.Context, email string) (*User, bool, error) {
 	return getByEmail(ctx, email, components.GetDB(), components.GetRedis(), false)
 }
 
-func getByEmail(ctx context.Context, email string, database *gorm.DB, cache data.RedisCache, forceUpdate bool) (*User, bool, error) {
+func getByEmail(ctx context.Context, email string, database *gorm.DB, cache *redis.Client, forceUpdate bool) (*User, bool, error) {
 	return data.GetRLCached(ctx, "user:email:"+email, cache, forceUpdate, func(ctx context.Context) (*User, bool, error) {
 		var user User
 		err := database.WithContext(ctx).Where("email = ?", email).First(&user).Error
@@ -130,7 +131,7 @@ func GetByApiToken(ctx context.Context, api_token string) (*User, bool, error) {
 	return getByApiToken(ctx, api_token, components.GetDB(), components.GetRedis(), false)
 }
 
-func getByApiToken(ctx context.Context, apiToken string, database *gorm.DB, cache data.RedisCache, forceUpdate bool) (*User, bool, error) {
+func getByApiToken(ctx context.Context, apiToken string, database *gorm.DB, cache *redis.Client, forceUpdate bool) (*User, bool, error) {
 	return data.GetRLCached(ctx, "user:api_token:"+apiToken, cache, forceUpdate, func(ctx context.Context) (*User, bool, error) {
 		var user User
 		err := database.WithContext(ctx).Where("api_token = ?", apiToken).First(&user).Error
@@ -199,7 +200,7 @@ func Count(ctx context.Context, filter ListFilter) (int64, error) {
 	return total, err
 }
 
-func refreshUserCache(ctx context.Context, database *gorm.DB, cache data.RedisCache, users ...*User) {
+func refreshUserCache(ctx context.Context, database *gorm.DB, cache *redis.Client, users ...*User) {
 	ids := make(map[uint64]bool)
 	emails := make(map[string]bool)
 	tokens := make(map[string]bool)
@@ -223,7 +224,7 @@ func Create(ctx context.Context, user *User) error {
 	return create(ctx, user, components.GetDB(), components.GetRedis())
 }
 
-func create(ctx context.Context, user *User, database *gorm.DB, cache data.RedisCache) error {
+func create(ctx context.Context, user *User, database *gorm.DB, cache *redis.Client) error {
 	if user == nil {
 		return fmt.Errorf("user is required")
 	}
@@ -243,7 +244,7 @@ func Update(ctx context.Context, user *User) error {
 	return update(ctx, user, components.GetDB(), components.GetRedis())
 }
 
-func update(ctx context.Context, user *User, database *gorm.DB, cache data.RedisCache) error {
+func update(ctx context.Context, user *User, database *gorm.DB, cache *redis.Client) error {
 	if user == nil || user.ID == 0 {
 		return fmt.Errorf("user with an ID is required")
 	}
@@ -279,7 +280,7 @@ func Delete(ctx context.Context, id uint64) error {
 	return deleteUser(ctx, id, components.GetDB(), components.GetRedis())
 }
 
-func deleteUser(ctx context.Context, id uint64, database *gorm.DB, cache data.RedisCache) error {
+func deleteUser(ctx context.Context, id uint64, database *gorm.DB, cache *redis.Client) error {
 	if id == 0 {
 		return fmt.Errorf("user ID is required")
 	}
