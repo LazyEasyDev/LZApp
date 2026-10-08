@@ -1,7 +1,5 @@
 filippo.io/edwards25519 v1.2.0 h1:crnVqOiS4jqYleHd9vaKZ+HKtHfllngJIiOpNpoJsjo=
 filippo.io/edwards25519 v1.2.0/go.mod h1:xzAOLCNug/yB62zG1bQ8uziwrIqIuxhctzJT18Q77mc=
-github.com/DATA-DOG/go-sqlmock v1.5.2 h1:OcvFkGmslmlZibjAjaHm3L//6LiuBgolP7OputlJIzU=
-github.com/DATA-DOG/go-sqlmock v1.5.2/go.mod h1:88MAG/4G7SMwSE3CeA0ZKzrT5CiOU3OJ+JlNzwDqpNU=
 github.com/LazyEasyDev/EasyLog v0.0.0-20260925132759-daa542d7b335 h1:+084xK9qD5leO23FYK/SwuN/dgTurjFFxrPwe2Okd7U=
 github.com/LazyEasyDev/EasyLog v0.0.0-20260925132759-daa542d7b335/go.mod h1:SYuuIl2CxygK/A0NMkCtmHHfkm20KsGR8F+y3YpqBAM=
 github.com/LazyEasyDev/EasyRoutine v0.0.0-20260919064601-ef0bc1c54658 h1:GhllFXp1R8BXmjQQ5gt53JOSirC4fiuzyi34FB+tJe4=
