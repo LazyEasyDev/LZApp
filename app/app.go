@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log/slog"
 
 	"github.com/LazyEasyDev/EasyRoutine"
@@ -12,35 +10,29 @@ import (
 	"github.com/LazyEasyDev/LZApp/config"
 )
 
-func Run(ctx context.Context) (runErr error) {
-	ctx, cancelAll := context.WithCancelCause(ctx)
-	defer cancelAll(nil)
+func Run(ctx context.Context) error {
+	ctx, cancelAll := context.WithCancel(ctx)
 	defer func() {
-		if runErr != nil {
-			cancelAll(runErr)
+		cleanupErr := components.WaitAndClose()
+		if cleanupErr != nil {
+			slog.Error("components cleanup failed", "error", cleanupErr)
 		}
-		EasyRoutine.Wait()
-
-		cleanupErr := components.Close()
-		cause := context.Cause(ctx)
-		if errors.Is(cause, context.Canceled) || errors.Is(cause, runErr) {
-			cause = nil
-		}
-		runErr = errors.Join(runErr, cause, cleanupErr)
+		cancelAll()
 	}()
 
 	if err := components.Init(ctx, config.GetConfig()); err != nil {
+		cancelAll()
 		return err
 	}
-
 	return Start(ctx, cancelAll)
 }
 
-func Start(ctx context.Context, cancelAll context.CancelCauseFunc) error {
+func Start(ctx context.Context, cancelAll context.CancelFunc) error {
 
 	// Initialize dbkv (database key-value store)////////////////////////////////
 	if err := dbkv.Init(ctx, components.GetDB()); err != nil {
-		return fmt.Errorf("initialize dbkv: %w", err)
+		cancelAll()
+		return err
 	}
 	////////////////////////////////////////////////////////////////////////////////
 
@@ -48,22 +40,20 @@ func Start(ctx context.Context, cancelAll context.CancelCauseFunc) error {
 	_, err := EasyRoutine.SafeGo(
 		ctx, func(taskCtx context.Context) {
 			if err := startHTTPServer(taskCtx); err != nil {
-				cancelAll(fmt.Errorf("http service: %w", err))
+				slog.Error("http service failed", "error", err)
+				cancelAll()
 			}
 		}, func(recovered EasyRoutine.Panic, failures int) EasyRoutine.PanicDecision {
-			slog.Error("Service panicked", "http service panic", recovered.Value, "stack", string(recovered.Stack))
-			cancelAll(fmt.Errorf("http service panic: %v", recovered.Value))
+			slog.Error("http service panic", "error", recovered.Value, "stack", string(recovered.Stack))
+			cancelAll()
 			return EasyRoutine.NoRetry()
 		},
 	)
 	if err != nil {
-		err = fmt.Errorf("start http service: %w", err)
-		cancelAll(err)
 		return err
 	}
 	////////////////////////////////////////////////////////////////
-
 	// add additional services here if needed
-
 	return nil
+
 }
