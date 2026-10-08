@@ -2,7 +2,6 @@ package components
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -241,55 +240,45 @@ func Init(ctx context.Context, appConfig *config.AppConfig) error {
 	return nil
 }
 
-func closeComponents() error {
+func closeComponents() {
 	fmt.Fprintln(os.Stderr) //ctr+c signal for newline
 	slog.Info("----------closing components..................----------------")
-
-	var errs []error
-
 	// Close the HTTP server if it was initialized
 	if err := CloseHttpServer(); err != nil {
-		errs = append(errs, err)
+		slog.Error("failed to close HTTP server:" + err.Error())
 	}
 	if err := CloseRedis(); err != nil {
-		errs = append(errs, err)
+		slog.Error("failed to close Redis:" + err.Error())
 	}
 	// Close the database if it was initialized
 	if err := CloseDB(); err != nil {
-		errs = append(errs, err)
+		slog.Error("failed to close database:" + err.Error())
 	}
-	// Return any errors that occurred during the closing of components
-	if len(errs) > 0 {
-		combinedErr := errors.Join(errs...)
-		slog.Error("errors occurred while closing components: " + combinedErr.Error())
-		return combinedErr
-	} else {
-		slog.Info("----------all components successfully closed------------------")
-		return nil
-	}
+	// Log that all components have been closed
+	slog.Info("----------all components closed------------------")
 
 }
 
 // WaitAndClose waits for all routines to complete and then closes all initialized components.
 // Local cache and easylog are closed after all routines have completed.
 // Previous global slog is restored after all components have been closed.
-func WaitAndClose() error {
+func WaitAndClose() {
 	slog.Info("waiting for all routines to complete before closing components")
 	slog.Info("--------------------------------------------------------------")
 	//wait for all routines to complete
 	EasyRoutine.Wait()
-	return Close()
+	Close()
 }
 
-func Close() (closeErr error) {
+func Close() {
 	defer func() {
 		// Close the local cache component first
 		lcache.Close()
 		// Close the local cache component
 		if err := easylog.Close(); err != nil {
-			closeErr = errors.Join(closeErr, fmt.Errorf("close logging: %w", err))
+			slog.Error("failed to close logging: " + err.Error())
 		}
 	}()
 
-	return closeComponents()
+	closeComponents()
 }

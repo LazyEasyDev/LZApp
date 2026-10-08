@@ -13,10 +13,7 @@ import (
 func Run(ctx context.Context) error {
 	ctx, cancelAll := context.WithCancel(ctx)
 	defer func() {
-		cleanupErr := components.WaitAndClose()
-		if cleanupErr != nil {
-			slog.Error("components cleanup failed", "error", cleanupErr)
-		}
+		components.WaitAndClose()
 		cancelAll()
 	}()
 
