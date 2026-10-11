@@ -6,7 +6,6 @@ import (
 
 	"github.com/LazyEasyDev/EasyRoutine"
 	"github.com/LazyEasyDev/LZApp/app/base/dbkv"
-	"github.com/LazyEasyDev/LZApp/app/statistics/example"
 	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/LazyEasyDev/LZApp/config"
 )
@@ -52,7 +51,6 @@ func Start(ctx context.Context, cancelAll context.CancelFunc) error {
 	}
 	////////////////////////////////////////////////////////////////
 	// add additional services here if needed
-	example.StatisticsExampleStart(ctx)
 
 	return nil
 
