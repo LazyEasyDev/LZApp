@@ -11,6 +11,7 @@ import (
 
 	"github.com/LazyEasyDev/LZApp/components/easylog"
 	"github.com/LazyEasyDev/LZApp/components/easyroutine"
+	"github.com/LazyEasyDev/LZApp/components/easystatistics"
 	"github.com/LazyEasyDev/LZApp/components/email"
 	"github.com/LazyEasyDev/LZApp/components/gormdb"
 	"github.com/LazyEasyDev/LZApp/components/httpserver"
@@ -218,10 +219,20 @@ func Init(ctx context.Context, appConfig *config.AppConfig) error {
 	}
 
 	// initialize the routine coordinator
+	slog.Info("initializing easyroutine coordinator...")
 	if err := easyroutine.Init(ctx, sqlDB); err != nil {
 		slog.Error("failed to initialize routine coordinator:" + err.Error())
 		return fmt.Errorf("initialize routine coordinator: %w", err)
 	}
+	slog.Info("easyroutine coordinator initialized successfully")
+
+	// Initialize the EasyStatistics component
+	slog.Info("initializing EasyStatistics...")
+	if err := easystatistics.Init(sqlDB); err != nil {
+		slog.Error("failed to initialize EasyStatistics:" + err.Error())
+		return fmt.Errorf("initialize EasyStatistics: %w", err)
+	}
+	slog.Info("EasyStatistics initialized successfully")
 
 	// Initialize the HTTP server if enabled
 	if err := InitHttpServer(appConfig.HTTP); err != nil {
@@ -247,6 +258,16 @@ func closeComponents() {
 	if err := CloseHttpServer(); err != nil {
 		slog.Error("failed to close HTTP server:" + err.Error())
 	}
+
+	//here the easyroutine already closed
+	slog.Info("easyroutine closed")
+
+	// Close the EasyStatistics component if it was initialized
+	if err := easystatistics.Close(); err != nil {
+		slog.Error("failed to close EasyStatistics:" + err.Error())
+	}
+	slog.Info("EasyStatistics closed")
+
 	if err := CloseRedis(); err != nil {
 		slog.Error("failed to close Redis:" + err.Error())
 	}
