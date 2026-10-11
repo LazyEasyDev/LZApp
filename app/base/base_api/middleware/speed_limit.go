@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/LazyEasyDev/LCache"
+	"github.com/LazyEasyDev/LZApp/common/cache_helper"
 	"github.com/danielgtaylor/huma/v2"
 )
 
@@ -43,14 +44,13 @@ func SpeedLimitMiddleware(api huma.API, policy SpeedLimitPolicy) func(huma.Conte
 }
 
 func consumeRequest(route, clientIP string, requestLimit uint64, windowSeconds int64) (int64, error) {
-
-	key := "http-rate-limit\\" + route + "\\" + clientIP
-	value, _, remainingTTLSeconds, found := LCache.GetWithTTL(key)
-	retryAfterSeconds := max(remainingTTLSeconds+1, 1)
-	counter, validCounter := value.(*requestCounter)
-	if !found || !validCounter {
+	item := cache_helper.NewItem("http-rate-limit").Attr("route", route).Attr("client_ip", clientIP)
+	result := LCache.Get(item.GetKey())
+	retryAfterSeconds := max(result.RemainingSeconds(), 1)
+	counter, validCounter := result.Val().(*requestCounter)
+	if !result.Found() || !validCounter {
 		counter = &requestCounter{}
-		LCache.Set(key, counter, windowSeconds)
+		item.Val(counter).Set(windowSeconds)
 		retryAfterSeconds = windowSeconds
 	}
 	if counter.count.Add(1) <= requestLimit {

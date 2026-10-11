@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/LazyEasyDev/LZApp/app/data"
+	"github.com/LazyEasyDev/LZApp/common/cache_helper"
 	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/LazyEasyDev/LZApp/components/redis"
 	"gorm.io/gorm"
@@ -96,7 +96,7 @@ func GetByID(ctx context.Context, id uint64) (*User, bool, error) {
 }
 
 func getByID(ctx context.Context, id uint64, database *gorm.DB, cache *redis.Client, forceUpdate bool) (*User, bool, error) {
-	return data.GetRLCached(ctx, "user:id:"+fmt.Sprint(id), cache, forceUpdate, func(ctx context.Context) (*User, bool, error) {
+	return cache_helper.GetRLCached(ctx, cache_helper.NewItem("user").Attr("id", id), cache, forceUpdate, func(ctx context.Context) (*User, bool, error) {
 		var user User
 		err := database.WithContext(ctx).First(&user, id).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -114,7 +114,7 @@ func GetByEmail(ctx context.Context, email string) (*User, bool, error) {
 }
 
 func getByEmail(ctx context.Context, email string, database *gorm.DB, cache *redis.Client, forceUpdate bool) (*User, bool, error) {
-	return data.GetRLCached(ctx, "user:email:"+email, cache, forceUpdate, func(ctx context.Context) (*User, bool, error) {
+	return cache_helper.GetRLCached(ctx, cache_helper.NewItem("user").Attr("email", email), cache, forceUpdate, func(ctx context.Context) (*User, bool, error) {
 		var user User
 		err := database.WithContext(ctx).Where("email = ?", email).First(&user).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -132,7 +132,7 @@ func GetByApiToken(ctx context.Context, api_token string) (*User, bool, error) {
 }
 
 func getByApiToken(ctx context.Context, apiToken string, database *gorm.DB, cache *redis.Client, forceUpdate bool) (*User, bool, error) {
-	return data.GetRLCached(ctx, "user:api_token:"+apiToken, cache, forceUpdate, func(ctx context.Context) (*User, bool, error) {
+	return cache_helper.GetRLCached(ctx, cache_helper.NewItem("user").Attr("api_token", apiToken), cache, forceUpdate, func(ctx context.Context) (*User, bool, error) {
 		var user User
 		err := database.WithContext(ctx).Where("api_token = ?", apiToken).First(&user).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {

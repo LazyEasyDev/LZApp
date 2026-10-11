@@ -81,7 +81,7 @@ func initWithInterval(ctx context.Context, connection *gorm.DB, interval time.Du
 	}
 	database.Store(connection)
 	cache.Store(&snapshot)
-	worker, err := easyroutinelib.SafeGo(ctx, func(taskCtx context.Context) {
+	worker, err := easyroutinelib.SafeGoWithCtx(ctx, func(taskCtx context.Context) {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {

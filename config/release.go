@@ -8,6 +8,9 @@ var releaseAppConfig = func() AppConfig {
 	appConfig.Log.DirectoryRelative = "app"
 	appConfig.DB.LogLevel = "silent"
 
+	//
+	appConfig.SecurityHMAC.HMACKey = "lzapp-release-hmac-key"
+
 	//assign you config here
 	return appConfig
 }()

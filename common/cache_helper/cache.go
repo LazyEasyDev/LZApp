@@ -1,8 +1,9 @@
-package data
+package cache_helper
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/LazyEasyDev/LCache"
@@ -52,59 +53,69 @@ type cacheLookup[T any] struct {
 }
 
 // GetRLCached uses Redis (R) and local cache (L) with DefaultRLCacheTTL.
+// item must be non-nil and supplies the key for both caches and the local tag.
+// Cache writes update item.Val. Use a fresh item per call and do not mutate it
+// after passing it in; canceled calls may continue using it in the background.
 // Lookups check local cache, then Redis, then load. Redis values are JSON-encoded
 // on writes and JSON-decoded on reads, so T must support both operations.
 // Missing records are cached as JSON null in Redis.
 // Both load and GetRLCached return (record, false, nil) when found,
 // (nil, true, nil) when not found, or (nil, false, err) on failure.
 // forceUpdate bypasses cache reads and singleflight, then refreshes both caches.
-func GetRLCached[T any](ctx context.Context, key string, cache *redis.Client, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
-	return GetRLCachedWithTTL(ctx, key, cache, DefaultRLCacheTTL(), forceUpdate, load)
+func GetRLCached[T any](ctx context.Context, item *CacheItem, cache *redis.Client, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
+	return GetRLCachedWithTTL(ctx, item, cache, DefaultRLCacheTTL(), forceUpdate, load)
 }
 
 // GetRLCachedWithTTL uses Redis (R) and local cache (L) with TTLs in seconds.
 // It has the same lookup and forceUpdate behavior as GetRLCached, including JSON
 // encoding and decoding for Redis values and JSON null for missing records.
-func GetRLCachedWithTTL[T any](ctx context.Context, key string, cache *redis.Client, ttl RLCacheTTL, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
-	return getCachedWithTTL(ctx, key, cache, ttl, forceUpdate, load)
+func GetRLCachedWithTTL[T any](ctx context.Context, item *CacheItem, cache *redis.Client, ttl RLCacheTTL, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
+	return getCachedWithTTL(ctx, item, cache, ttl, forceUpdate, load)
 }
 
 // GetLCached uses only local cache (L) with DefaultLCacheTTL, then calls load on
 // a miss. It does not use Redis or JSON encoding, so T need not support JSON.
+// item must be non-nil and supplies the cache key and statistics tag.
+// Cache writes update item.Val. Use a fresh item per call and do not mutate it
+// after passing it in; canceled calls may continue using it in the background.
 // Both load and GetLCached return (record, false, nil) when found,
 // (nil, true, nil) when not found, or (nil, false, err) on failure.
 // forceUpdate bypasses cache reads and singleflight, then refreshes local cache.
-func GetLCached[T any](ctx context.Context, key string, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
-	return GetLCachedWithTTL(ctx, key, DefaultLCacheTTL(), forceUpdate, load)
+func GetLCached[T any](ctx context.Context, item *CacheItem, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
+	return GetLCachedWithTTL(ctx, item, DefaultLCacheTTL(), forceUpdate, load)
 }
 
 // GetLCachedWithTTL uses only local cache (L) with TTLs in seconds.
 // It has the same lookup and forceUpdate behavior as GetLCached and does not
 // use Redis or JSON encoding.
-func GetLCachedWithTTL[T any](ctx context.Context, key string, ttl LCacheTTL, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
-	return getCachedWithTTL(ctx, key, nil, RLCacheTTL{
+func GetLCachedWithTTL[T any](ctx context.Context, item *CacheItem, ttl LCacheTTL, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
+	return getCachedWithTTL(ctx, item, nil, RLCacheTTL{
 		LocalSeconds:         ttl.LocalSeconds,
 		NotFoundLocalSeconds: ttl.NotFoundLocalSeconds,
 	}, forceUpdate, load)
 }
 
-func getCachedWithTTL[T any](ctx context.Context, key string, cache *redis.Client, ttl RLCacheTTL, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
+func getCachedWithTTL[T any](ctx context.Context, item *CacheItem, cache *redis.Client, ttl RLCacheTTL, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}
+	if item == nil {
+		return nil, false, errors.New("cache item is required")
+	}
+	key := item.GetKey()
 	loadAndCache := func() (*T, bool, error) {
 		record, notFound, err := load(ctx)
 		if err != nil {
 			return nil, false, err
 		}
 		if notFound {
-			LCache.Set(key, (*T)(nil), ttl.NotFoundLocalSeconds)
+			item.Val((*T)(nil)).Set(ttl.NotFoundLocalSeconds)
 			if cache != nil {
 				cache.Set(ctx, key, "null", time.Duration(ttl.NotFoundRedisSeconds)*time.Second)
 			}
 			return nil, true, nil
 		}
-		LCache.Set(key, record, ttl.LocalSeconds)
+		item.Val(record).Set(ttl.LocalSeconds)
 		if cache != nil {
 			if encoded, err := json.Marshal(record); err == nil {
 				cache.Set(ctx, key, encoded, time.Duration(ttl.RedisSeconds)*time.Second)
@@ -116,11 +127,11 @@ func getCachedWithTTL[T any](ctx context.Context, key string, cache *redis.Clien
 		return loadAndCache()
 	}
 	getLocal := func() (*T, bool) {
-		cached, found := LCache.Get(key)
-		if !found {
+		cached := LCache.Get(key)
+		if !cached.Found() {
 			return nil, false
 		}
-		record, ok := cached.(*T)
+		record, ok := cached.Val().(*T)
 		return record, ok
 	}
 	if record, found := getLocal(); found {
@@ -142,10 +153,10 @@ func getCachedWithTTL[T any](ctx context.Context, key string, cache *redis.Clien
 				var record *T
 				if err := json.Unmarshal([]byte(encoded), &record); err == nil {
 					if record == nil {
-						LCache.Set(key, (*T)(nil), ttl.NotFoundLocalSeconds)
+						item.Val((*T)(nil)).Set(ttl.NotFoundLocalSeconds)
 						return cacheLookup[T]{notFound: true}, nil
 					}
-					LCache.Set(key, record, ttl.LocalSeconds)
+					item.Val(record).Set(ttl.LocalSeconds)
 					return cacheLookup[T]{record: record}, nil
 				}
 			}

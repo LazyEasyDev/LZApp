@@ -14,7 +14,10 @@ func Init(ctx context.Context, sqlDB *sql.DB) error {
 		return fmt.Errorf("SQL database is nil")
 	}
 
-	if err := EasyRoutine.InitSQLLease(ctx, sqlDB, EasyRoutine.SQLMySQL); err != nil {
+	if err := EasyRoutine.Initialize(ctx, &EasyRoutine.SQLConfig{
+		DB:      sqlDB,
+		Dialect: EasyRoutine.SQLMySQL,
+	}); err != nil {
 		return fmt.Errorf("initialize MySQL lease: %w", err)
 	}
 	return nil

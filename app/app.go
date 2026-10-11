@@ -34,7 +34,7 @@ func Start(ctx context.Context, cancelAll context.CancelFunc) error {
 	////////////////////////////////////////////////////////////////////////////////
 
 	/////////////////start HTTP service if enabled////////////////////////////////
-	_, err := EasyRoutine.SafeGo(
+	_, err := EasyRoutine.SafeGoWithCtx(
 		ctx, func(taskCtx context.Context) {
 			if err := startHTTPServer(taskCtx); err != nil {
 				slog.Error("http service failed", "error", err)

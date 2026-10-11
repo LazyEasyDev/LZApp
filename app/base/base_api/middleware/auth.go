@@ -3,11 +3,14 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"slices"
 	"strings"
 
 	"github.com/LazyEasyDev/LZApp/app/base/users"
+	"github.com/LazyEasyDev/LZApp/components"
+	"github.com/LazyEasyDev/LZApp/components/security"
 	"github.com/LazyEasyDev/LZApp/config"
 	"github.com/danielgtaylor/huma/v2"
 )
@@ -79,6 +82,12 @@ func userAuthMiddleware(api huma.API, requireAllAccessList, requireAnyAccessList
 }
 
 func ValidateUserToken(ctx context.Context, token string) (*users.User, bool, error) {
+	if err := components.GetTokenSigner().VerifyToken(token); err != nil {
+		if errors.Is(err, security.ErrInvalidHMACToken) {
+			return nil, true, nil
+		}
+		return nil, false, err
+	}
 	return users.GetByApiToken(ctx, token)
 }
 
