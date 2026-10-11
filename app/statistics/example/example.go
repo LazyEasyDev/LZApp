@@ -2,6 +2,7 @@ package example
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -40,24 +41,26 @@ func ExampleMiningCreateFunction() {
 	}
 }
 
-func ExampleMiningFunction() {
+func ExampleMiningAddFunction(values *MiningValues, scoreValue int64) error {
+	if values == nil {
+		return errors.New("values is nil")
+	}
 
-	values := MiningValues{User: "alice", Activity: "mining"}
-	if err := score.Add(values, 10); err != nil {
-		slog.Error("failed to add score", "error", err)
-		return
+	if score == nil {
+		return errors.New("statistics not initialized")
 	}
-	if err := score.Add(values, -3); err != nil {
-		slog.Error("failed to add score", "error", err)
-		return
+
+	if err := score.Add(*values, scoreValue); err != nil {
+		return fmt.Errorf("failed to add score: %w", err)
 	}
+
+	return nil
 }
 
 func ExampleMiningValues() {
 
-	score, err := EasyStatistics.GetStatistics[MiningValues]("mining_score")
-	if err != nil {
-		slog.Error("failed to get statistics", "error", err)
+	if score == nil {
+		slog.Error("statistics not initialized")
 		return
 	}
 
@@ -79,13 +82,14 @@ func ExampleMiningValues() {
 }
 
 func StatisticsExampleStart(ctx context.Context) {
+
+	ExampleMiningCreateFunction()
+
 	EasyRoutine.SafeGoWithCtx(
 		ctx, func(taskCtx context.Context) {
 			// Add additional service logic here if needed
 			ticker := time.NewTicker(time.Second) // Adjust the interval as needed
 			defer ticker.Stop()
-
-			ExampleMiningCreateFunction()
 
 			for {
 				select {
@@ -93,8 +97,7 @@ func StatisticsExampleStart(ctx context.Context) {
 					return
 				case <-ticker.C:
 					// Perform periodic task here
-					//slog.Info("performing periodic task")
-					ExampleMiningFunction()
+					ExampleMiningAddFunction(&MiningValues{User: "alice", Activity: "mining"}, 10)
 					ExampleMiningValues()
 				}
 
