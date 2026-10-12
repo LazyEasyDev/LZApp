@@ -47,6 +47,7 @@ type RegisterInput struct {
 		Email     string  `json:"email" minLength:"3" maxLength:"254"`
 		Password  string  `json:"password" minLength:"1" maxLength:"72"`
 		EmailCode string  `json:"email_code" pattern:"^[0-9]{6}$"`
+		Ref       string  `json:"ref,omitempty"`
 	}
 }
 
@@ -184,6 +185,7 @@ func RegisterRoutes(api huma.API) {
 		Tags:        []string{"User"},
 		Security:    []map[string][]string{},
 	}, LogoutHandler)
+	registerRefRoutes(api)
 }
 
 func tokenCookie(token string) (http.Cookie, error) {
@@ -212,6 +214,7 @@ func tokenCookie(token string) (http.Cookie, error) {
 func publicUser(account *users.User) users.User {
 	result := *account
 	result.Password = ""
+	result.RegIP = ""
 	return result
 }
 
@@ -322,6 +325,7 @@ func RegisterHandler(ctx context.Context, input *RegisterInput) (*UserOutput, er
 	if err := validateNewPassword(input.Body.Password); err != nil {
 		return nil, err
 	}
+	ref, _ := verifiedRef(ctx, input.Body.Ref)
 	if err := verifyEmailCode(ctx, email, "register", input.Body.EmailCode); err != nil {
 		return nil, err
 	}
@@ -334,7 +338,10 @@ func RegisterHandler(ctx context.Context, input *RegisterInput) (*UserOutput, er
 		return nil, huma.Error500InternalServerError("unable to generate token")
 	}
 	access, _ := json.Marshal([]string{users.ACCESS_USER})
-	account := &users.User{Name: input.Body.Name, Email: email, Password: password, ApiToken: token, Access: string(access)}
+	account := &users.User{
+		Name: input.Body.Name, Email: email, Password: password, ApiToken: token, Access: string(access),
+		Ref: ref, RegIP: middleware.GetClientIP(ctx),
+	}
 	if err := users.Create(ctx, account); err != nil {
 		return nil, huma.Error503ServiceUnavailable(err.Error())
 	}

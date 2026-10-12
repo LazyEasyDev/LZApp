@@ -18,6 +18,8 @@ var (
 	ErrNotInitialized   = errors.New("HMAC signer is not initialized")
 )
 
+const maxHMACTokenLength = 4096
+
 type HMACTokenOptions struct {
 	PayloadBytes   int
 	SignatureBytes int
@@ -81,35 +83,69 @@ func (signer *HMACTokenSigner) GenerateRandToken() (string, error) {
 	if _, err := rand.Read(payload); err != nil {
 		return "", fmt.Errorf("generate token payload: %w", err)
 	}
-	return base64.RawURLEncoding.EncodeToString(payload) + "." +
-		base64.RawURLEncoding.EncodeToString(signer.signature(payload)), nil
+	return signer.GenerateToken([]string{string(payload)})
 }
 
-func (signer *HMACTokenSigner) VerifyToken(token string) error {
+func (signer *HMACTokenSigner) GenerateToken(fields []string) (string, error) {
 	if signer == nil || len(signer.key) < sha256.Size {
-		return ErrNotInitialized
+		return "", ErrNotInitialized
 	}
-	payloadSize := base64.RawURLEncoding.EncodedLen(signer.payloadBytes)
+	if len(fields) == 0 {
+		return "", fmt.Errorf("at least one token field is required")
+	}
+	tokenLength := 2 + base64.RawURLEncoding.EncodedLen(signer.signatureBytes) + len(fields)
+	if tokenLength > maxHMACTokenLength {
+		return "", fmt.Errorf("token exceeds %d characters", maxHMACTokenLength)
+	}
+	encodedFields := make([]string, len(fields))
+	for index, field := range fields {
+		if len(field) > maxHMACTokenLength {
+			return "", fmt.Errorf("token exceeds %d characters", maxHMACTokenLength)
+		}
+		tokenLength += base64.RawURLEncoding.EncodedLen(len(field))
+		if tokenLength > maxHMACTokenLength {
+			return "", fmt.Errorf("token exceeds %d characters", maxHMACTokenLength)
+		}
+		encodedFields[index] = base64.RawURLEncoding.EncodeToString([]byte(field))
+	}
+	signedPart := strings.Join(encodedFields, ".")
+	return "A" + signedPart + "." +
+		base64.RawURLEncoding.EncodeToString(signer.signature([]byte(signedPart))) + "Z", nil
+}
+
+func (signer *HMACTokenSigner) VerifyToken(token string) ([]string, error) {
+	if signer == nil || len(signer.key) < sha256.Size {
+		return nil, ErrNotInitialized
+	}
 	signatureSize := base64.RawURLEncoding.EncodedLen(signer.signatureBytes)
-	if len(token) != payloadSize+signatureSize+1 {
-		return ErrInvalidHMACToken
+	if len(token) < signatureSize+3 || len(token) > maxHMACTokenLength || token[0] != 'A' || token[len(token)-1] != 'Z' {
+		return nil, ErrInvalidHMACToken
 	}
-	payloadText, signatureText, found := strings.Cut(token, ".")
-	if !found || len(payloadText) != payloadSize || len(signatureText) != signatureSize {
-		return ErrInvalidHMACToken
+	inner := token[1 : len(token)-1]
+	separator := strings.LastIndexByte(inner, '.')
+	if separator < 0 {
+		return nil, ErrInvalidHMACToken
 	}
-	payload, err := base64.RawURLEncoding.Strict().DecodeString(payloadText)
-	if err != nil || len(payload) != signer.payloadBytes || base64.RawURLEncoding.EncodeToString(payload) != payloadText {
-		return ErrInvalidHMACToken
+	signedPart, signatureText := inner[:separator], inner[separator+1:]
+	if len(signatureText) != signatureSize {
+		return nil, ErrInvalidHMACToken
 	}
 	signature, err := base64.RawURLEncoding.Strict().DecodeString(signatureText)
 	if err != nil || len(signature) != signer.signatureBytes || base64.RawURLEncoding.EncodeToString(signature) != signatureText {
-		return ErrInvalidHMACToken
+		return nil, ErrInvalidHMACToken
 	}
-	if !hmac.Equal(signature, signer.signature(payload)) {
-		return ErrInvalidHMACToken
+	if !hmac.Equal(signature, signer.signature([]byte(signedPart))) {
+		return nil, ErrInvalidHMACToken
 	}
-	return nil
+	fields := strings.Split(signedPart, ".")
+	for index, encoded := range fields {
+		decoded, err := base64.RawURLEncoding.Strict().DecodeString(encoded)
+		if err != nil || base64.RawURLEncoding.EncodeToString(decoded) != encoded {
+			return nil, ErrInvalidHMACToken
+		}
+		fields[index] = string(decoded)
+	}
+	return fields, nil
 }
 
 func (signer *HMACTokenSigner) signature(payload []byte) []byte {

@@ -25,6 +25,8 @@ type PublicUser struct {
 	Name      *string   `json:"name"`
 	Email     string    `json:"email"`
 	Access    []string  `json:"access"`
+	Ref       string    `json:"ref"`
+	RegIP     string    `json:"reg_ip"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -34,6 +36,8 @@ type ListInput struct {
 	Name     string `query:"name" maxLength:"100"`
 	Email    string `query:"email" maxLength:"254"`
 	Access   string `query:"access" enum:"user,admin,viewall,am"`
+	Ref      string `query:"ref" maxLength:"26"`
+	RegIP    string `query:"reg_ip" maxLength:"45"`
 	Page     int    `query:"page" minimum:"1" default:"1"`
 	PageSize int    `query:"page_size" minimum:"1" maximum:"100" default:"20"`
 }
@@ -118,6 +122,8 @@ func ListHandler(ctx context.Context, input *ListInput) (*ListOutput, error) {
 		Name:   strings.TrimSpace(input.Name),
 		Email:  strings.TrimSpace(input.Email),
 		Access: input.Access,
+		Ref:    strings.TrimSpace(input.Ref),
+		RegIP:  strings.TrimSpace(input.RegIP),
 	}
 	if input.ID != 0 {
 		filter.ID = input.ID
@@ -225,6 +231,8 @@ func publicUser(account *accounts.User) (PublicUser, error) {
 		Name:      account.Name,
 		Email:     account.Email,
 		Access:    access,
+		Ref:       account.Ref,
+		RegIP:     account.RegIP,
 		CreatedAt: account.CreatedAt,
 		UpdatedAt: account.UpdatedAt,
 	}, nil

@@ -82,7 +82,7 @@ func userAuthMiddleware(api huma.API, requireAllAccessList, requireAnyAccessList
 }
 
 func ValidateUserToken(ctx context.Context, token string) (*users.User, bool, error) {
-	if err := components.GetTokenSigner().VerifyToken(token); err != nil {
+	if _, err := components.GetTokenSigner().VerifyToken(token); err != nil {
 		if errors.Is(err, security.ErrInvalidHMACToken) {
 			return nil, true, nil
 		}

@@ -14,6 +14,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -44,6 +45,11 @@ func New(httpConfig *http_config.HTTPConfig) (*Server, error) {
 	}
 	if httpConfig.HTTPSPort < 1 || httpConfig.HTTPSPort > 65535 {
 		return nil, fmt.Errorf("HTTPS port must be between 1 and 65535")
+	}
+	for _, value := range httpConfig.TrustedProxyCIDRs {
+		if _, err := netip.ParsePrefix(value); err != nil {
+			return nil, fmt.Errorf("invalid trusted proxy CIDR %q: %w", value, err)
+		}
 	}
 	const maxTimeoutSeconds = int64((1<<63 - 1) / time.Second)
 	for _, timeout := range []struct {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +24,8 @@ type User struct {
 	Password  string    `gorm:"size:128;not null" json:"password"`
 	ApiToken  string    `gorm:"size:128;not null;uniqueIndex" json:"api_token"`
 	Access    string    `gorm:"type:text" json:"access"`
+	Ref       string    `gorm:"size:26;index" json:"ref"`
+	RegIP     string    `gorm:"size:45" json:"reg_ip,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -151,6 +154,8 @@ type ListFilter struct {
 	Email    string
 	ApiToken string
 	Access   string
+	Ref      string
+	RegIP    string
 }
 
 func applyListFilter(query *gorm.DB, filter ListFilter) *gorm.DB {
@@ -170,6 +175,18 @@ func applyListFilter(query *gorm.DB, filter ListFilter) *gorm.DB {
 	if filter.Access != "" {
 		query = query.Where("access LIKE ?", "%\""+escape.Replace(filter.Access)+"\"%")
 	}
+	if filter.Ref != "" {
+		if strings.Contains(filter.Ref, ":") {
+			query = query.Where("ref = ?", filter.Ref)
+		} else if _, err := strconv.ParseUint(filter.Ref, 10, 64); err == nil {
+			query = query.Where("ref LIKE ? ESCAPE '!'", filter.Ref+":%")
+		} else {
+			query = query.Where("ref LIKE ? ESCAPE '!'", "%:"+escape.Replace(filter.Ref))
+		}
+	}
+	if filter.RegIP != "" {
+		query = query.Where("reg_ip = ?", filter.RegIP)
+	}
 	return query
 }
 
@@ -186,7 +203,7 @@ func List(ctx context.Context, filter ListFilter, limit, offset int) ([]User, er
 
 	var users []User
 	err := applyListFilter(components.GetDB().WithContext(ctx), filter).
-		Select("id", "name", "email", "access", "created_at", "updated_at").
+		Select("id", "name", "email", "access", "ref", "reg_ip", "created_at", "updated_at").
 		Order("id ASC").
 		Limit(limit).
 		Offset(offset).
