@@ -55,7 +55,7 @@ func RegisterRoutes(api huma.API) {
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "get-admin-easystatistics-list",
-		Summary:     "List locally registered statistics definitions",
+		Summary:     "List locally registered statistics with persisted dimension row counts",
 		Method:      http.MethodGet,
 		Path:        "/admin/easystatistics/list",
 		Tags:        []string{"Admin EasyStatistics"},
@@ -80,7 +80,7 @@ func RegisterRoutes(api huma.API) {
 }
 
 func ListHandler(_ context.Context, _ *ListInput) (*ListOutput, error) {
-	items, err := EasyStatistics.ListStatistics()
+	items, err := EasyStatistics.ListStatistics(true)
 	if err != nil {
 		return nil, huma.Error503ServiceUnavailable("statistics list is unavailable")
 	}
