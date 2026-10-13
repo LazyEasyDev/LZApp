@@ -6,6 +6,7 @@ import (
 	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler"
 	admindbkv "github.com/LazyEasyDev/LZApp/app/base/base_api/handler/admin/dbkv"
 	admineasyroutine "github.com/LazyEasyDev/LZApp/app/base/base_api/handler/admin/easyroutine"
+	admineasystatistics "github.com/LazyEasyDev/LZApp/app/base/base_api/handler/admin/easystatistics"
 	adminusers "github.com/LazyEasyDev/LZApp/app/base/base_api/handler/admin/users"
 	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler/docs"
 	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler/user"
@@ -32,6 +33,7 @@ func registerRoutes(api huma.API) {
 	adminusers.RegisterRoutes(api)
 	admindbkv.RegisterRoutes(api)
 	admineasyroutine.RegisterRoutes(api)
+	admineasystatistics.RegisterRoutes(api)
 	user.RegisterRoutes(api)
 
 	// Additional routes can be registered here

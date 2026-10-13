@@ -64,7 +64,7 @@ func ExampleMiningValues() {
 		return
 	}
 
-	record, err := score.Query().
+	records, err := score.Query().
 		Field("user", "alice").
 		GroupInterval(EasyStatistics.GroupForever).
 		GroupTime("forever").
@@ -73,10 +73,10 @@ func ExampleMiningValues() {
 		slog.Error("failed to get record", "error", err)
 		return
 	}
-	if record == nil {
+	if len(records) == 0 {
 		fmt.Println("No uploaded total yet.")
 	} else {
-		fmt.Println(record.Counter, record.LastUpdateTime)
+		fmt.Println(records[0].Counter, records[0].LastUpdateTime)
 	}
 
 }

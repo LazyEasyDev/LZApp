@@ -5,7 +5,7 @@ go 1.25.13
 require (
 	github.com/LazyEasyDev/EasyLog v0.0.0-20260925132759-daa542d7b335
 	github.com/LazyEasyDev/EasyRoutine v0.0.0-20261013052029-7b003de1f574
-	github.com/LazyEasyDev/EasyStatistics v0.0.0-20261013024104-8654bab21e5a
+	github.com/LazyEasyDev/EasyStatistics v0.0.0-20261013074008-064800818042
 	github.com/LazyEasyDev/LCache v0.0.0-20261011100739-7aa13ebea625
 	github.com/danielgtaylor/huma/v2 v2.39.1
 	github.com/go-chi/chi/v5 v5.3.2
