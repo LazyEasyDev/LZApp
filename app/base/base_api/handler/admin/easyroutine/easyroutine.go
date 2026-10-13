@@ -2,55 +2,22 @@ package easyroutine
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"time"
 
+	"github.com/LazyEasyDev/EasyRoutine"
 	"github.com/LazyEasyDev/LZApp/app/base/base_api/middleware"
 	"github.com/LazyEasyDev/LZApp/app/base/users"
-	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/danielgtaylor/huma/v2"
 )
-
-type LogCounts struct {
-	NotStarted int64 `json:"not_started"`
-	Running    int64 `json:"running"`
-	Done       int64 `json:"done"`
-	Panic      int64 `json:"panic"`
-	Other      int64 `json:"other"`
-}
-
-type Routine struct {
-	RoutineID     string    `json:"routine_id"`
-	Name          string    `json:"name"`
-	Owner         string    `json:"owner"`
-	Status        string    `json:"status"`
-	SuccessCount  int64     `json:"success_count"`
-	FailureCount  int64     `json:"failure_count"`
-	ExpiresAt     int64     `json:"expires_at"`
-	UpdatedAt     int64     `json:"updated_at"`
-	LeaseActive   bool      `json:"lease_active"`
-	RetainedLogs  int64     `json:"retained_logs"`
-	LatestPanicAt int64     `json:"latest_panic_at"`
-	LogCounts     LogCounts `json:"log_counts" gorm:"-"`
-}
-
-type RoutineLog struct {
-	ID        string `json:"id"`
-	RoutineID string `json:"routine_id"`
-	Name      string `json:"name"`
-	Owner     string `json:"owner"`
-	Action    string `json:"action"`
-	Status    string `json:"status"`
-	Log       string `json:"log"`
-	CreatedAt int64  `json:"created_at"`
-}
 
 type ListInput struct{}
 
 type ListOutput struct {
 	Body struct {
-		Items     []Routine `json:"items"`
-		FetchedAt int64     `json:"fetched_at"`
+		Items     []EasyRoutine.Supervisor `json:"items"`
+		FetchedAt int64                    `json:"fetched_at"`
 	}
 }
 
@@ -60,8 +27,20 @@ type LogsInput struct {
 
 type LogsOutput struct {
 	Body struct {
-		Items     []RoutineLog `json:"items"`
-		FetchedAt int64        `json:"fetched_at"`
+		Items     []EasyRoutine.SupervisorLog `json:"items"`
+		FetchedAt int64                       `json:"fetched_at"`
+	}
+}
+
+type DeleteInput struct {
+	Body struct {
+		Name string `json:"name" minLength:"1" maxLength:"255"`
+	}
+}
+
+type DeleteOutput struct {
+	Body struct {
+		Message string `json:"message"`
 	}
 }
 
@@ -69,6 +48,10 @@ func RegisterRoutes(api huma.API) {
 	readMiddleware := huma.Middlewares{
 		middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 120, Window: time.Minute}),
 		middleware.UserAuthAnyAccessMiddleware(api, []string{users.ACCESS_ADMIN, users.ACCESS_VIEWALL}),
+	}
+	writeMiddleware := huma.Middlewares{
+		middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 30, Window: time.Minute}),
+		middleware.UserAuthMiddleware(api, []string{users.ACCESS_ADMIN}),
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "get-admin-easyroutine-list",
@@ -86,79 +69,46 @@ func RegisterRoutes(api huma.API) {
 		Tags:        []string{"Admin EasyRoutine"},
 		Middlewares: readMiddleware,
 	}, LogsHandler)
+	huma.Register(api, huma.Operation{
+		OperationID: "post-admin-easyroutine-delete",
+		Summary:     "Delete a routine's stored state and retained history",
+		Method:      http.MethodPost,
+		Path:        "/admin/easyroutine/delete",
+		Tags:        []string{"Admin EasyRoutine"},
+		Middlewares: writeMiddleware,
+	}, DeleteHandler)
 }
 
 func ListHandler(ctx context.Context, _ *ListInput) (*ListOutput, error) {
-	db := components.GetDB().WithContext(ctx)
-	items := make([]Routine, 0)
-	err := db.Table("easy_rountine_unique").
-		Select(
-			"routine_id", "name", "owner", "status", "success_count", "failure_count",
-			"expires_at", "updated_at", "expires_at > UNIX_TIMESTAMP() AS lease_active",
-		).
-		Order("name, routine_id").
-		Find(&items).Error
+	supervisors, err := EasyRoutine.ListSupervisors(ctx)
 	if err != nil {
 		return nil, huma.Error503ServiceUnavailable("routine list is unavailable")
-	}
-	var summaries []struct {
-		RoutineID string
-		Status    string
-		Count     int64
-		LatestAt  int64
-	}
-	err = db.Table("easy_routine_unique_log").
-		Select("routine_id, status, COUNT(*) AS count, MAX(created_at) AS latest_at").
-		Group("routine_id, status").
-		Find(&summaries).Error
-	if err != nil {
-		return nil, huma.Error503ServiceUnavailable("routine list is unavailable")
-	}
-	routinesByID := make(map[string]*Routine, len(items))
-	for index := range items {
-		routinesByID[items[index].RoutineID] = &items[index]
-	}
-	for _, summary := range summaries {
-		routine := routinesByID[summary.RoutineID]
-		if routine == nil {
-			continue
-		}
-		routine.RetainedLogs += summary.Count
-		switch summary.Status {
-		case "not_started":
-			routine.LogCounts.NotStarted += summary.Count
-		case "running":
-			routine.LogCounts.Running += summary.Count
-		case "done":
-			routine.LogCounts.Done += summary.Count
-		case "panic":
-			routine.LogCounts.Panic += summary.Count
-			if summary.LatestAt > routine.LatestPanicAt {
-				routine.LatestPanicAt = summary.LatestAt
-			}
-		default:
-			routine.LogCounts.Other += summary.Count
-		}
 	}
 	output := &ListOutput{}
-	output.Body.Items = items
+	output.Body.Items = supervisors
 	output.Body.FetchedAt = time.Now().Unix()
 	return output, nil
 }
 
+func DeleteHandler(ctx context.Context, input *DeleteInput) (*DeleteOutput, error) {
+	if err := EasyRoutine.DeleteSupervisorRecords(ctx, input.Body.Name); err != nil {
+		if errors.Is(err, EasyRoutine.ErrSupervisorRegistered) {
+			return nil, huma.Error409Conflict(err.Error())
+		}
+		return nil, huma.Error503ServiceUnavailable("routine deletion is unavailable")
+	}
+	output := &DeleteOutput{}
+	output.Body.Message = "Routine records deleted"
+	return output, nil
+}
+
 func LogsHandler(ctx context.Context, input *LogsInput) (*LogsOutput, error) {
-	items := make([]RoutineLog, 0)
-	err := components.GetDB().WithContext(ctx).
-		Table("easy_routine_unique_log").
-		Select("id", "routine_id", "name", "owner", "action", "status", "log", "created_at").
-		Where("routine_id = ?", input.RoutineID).
-		Order("created_at DESC, id DESC").
-		Find(&items).Error
+	history, err := EasyRoutine.GetSupervisorHistory(ctx, input.RoutineID)
 	if err != nil {
 		return nil, huma.Error503ServiceUnavailable("routine logs are unavailable")
 	}
 	output := &LogsOutput{}
-	output.Body.Items = items
+	output.Body.Items = history
 	output.Body.FetchedAt = time.Now().Unix()
 	return output, nil
 }
