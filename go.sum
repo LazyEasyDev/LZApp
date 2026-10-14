@@ -6,6 +6,8 @@ github.com/LazyEasyDev/EasyRoutine v0.0.0-20261013111825-9cbeead7fe65 h1:zylSG9j
 github.com/LazyEasyDev/EasyRoutine v0.0.0-20261013111825-9cbeead7fe65/go.mod h1:uDUb4Dm9jhx7UD/vweQnS9kHBVUvzR6o1GkOp2l6jvM=
 github.com/LazyEasyDev/EasyStatistics v0.0.0-20261013151951-56b6c159a318 h1:Uo/NzMNnK1dUBCwAWoUN9tdu4fhwjP+nc8zD3fCPpng=
 github.com/LazyEasyDev/EasyStatistics v0.0.0-20261013151951-56b6c159a318/go.mod h1:6xapVJUrWcRM+28LBqq1OoOkNCBNGImN3E58a7NccJo=
+github.com/LazyEasyDev/EasyStatistics v0.0.0-20261014053927-77178ec5ec05 h1:SndC3mX4Ovn65O3+skK45SK1+01vvccNKN89bc53gyg=
+github.com/LazyEasyDev/EasyStatistics v0.0.0-20261014053927-77178ec5ec05/go.mod h1:6xapVJUrWcRM+28LBqq1OoOkNCBNGImN3E58a7NccJo=
 github.com/LazyEasyDev/LCache v0.0.0-20261011100739-7aa13ebea625 h1:SiOjzWTS7/0OE5wBHErC2U4h0LA61fLN8fBkLZDl/xc=
 github.com/LazyEasyDev/LCache v0.0.0-20261011100739-7aa13ebea625/go.mod h1:YwEHM8EfJgyqs+SHiHM6SHmhbVh3XfdBCZZiKwsjlM0=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=

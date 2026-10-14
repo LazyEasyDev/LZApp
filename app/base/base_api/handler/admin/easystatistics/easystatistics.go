@@ -17,6 +17,8 @@ type ListInput struct{}
 type ListOutput struct {
 	Body struct {
 		Items           []EasyStatistics.StatisticsDefinition `json:"items"`
+		TotalDBCount    int64                                 `json:"total_db_count"`
+		ActiveDBCount   int64                                 `json:"active_db_count"`
 		MaxQueryBuckets int                                   `json:"max_query_buckets"`
 		FetchedAt       int64                                 `json:"fetched_at"`
 	}
@@ -80,12 +82,14 @@ func RegisterRoutes(api huma.API) {
 }
 
 func ListHandler(_ context.Context, _ *ListInput) (*ListOutput, error) {
-	items, err := EasyStatistics.ListStatistics(true)
+	items, totalDBCount, activeDBCount, err := EasyStatistics.ListStatistics(true)
 	if err != nil {
 		return nil, huma.Error503ServiceUnavailable("statistics list is unavailable")
 	}
 	output := &ListOutput{}
 	output.Body.Items = items
+	output.Body.TotalDBCount = totalDBCount
+	output.Body.ActiveDBCount = activeDBCount
 	output.Body.MaxQueryBuckets = EasyStatistics.MaxQueryBuckets
 	output.Body.FetchedAt = time.Now().Unix()
 	return output, nil
