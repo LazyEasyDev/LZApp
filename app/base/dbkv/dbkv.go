@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -23,9 +24,20 @@ import (
 const LastUpdatedKey = "__last_updated__"
 const updateInterval = time.Minute
 
+type Format string
+
+const (
+	FormatInt64   Format = "int64"
+	FormatBool    Format = "bool"
+	FormatFloat64 Format = "float64"
+	FormatJSONStr Format = "json_str"
+	FormatString  Format = "string"
+)
+
 type Entry struct {
 	ID          uint64 `gorm:"primaryKey" json:"id"`
 	Key         string `gorm:"size:191;not null;uniqueIndex" json:"key"`
+	Format      Format `gorm:"size:8;not null;check:dbkv_format,format IN ('int64','bool','float64','json_str','string')" json:"format"`
 	Value       string `gorm:"type:text;not null" json:"value"`
 	Description string `gorm:"type:text;not null" json:"description"`
 	Visible     bool   `gorm:"not null" json:"visible"`
@@ -38,6 +50,8 @@ func (Entry) TableName() string {
 var (
 	ErrNotInitialized     = errors.New("dbkv is not initialized")
 	ErrAlreadyInitialized = errors.New("dbkv is already initialized")
+	ErrFormatMismatch     = errors.New("dbkv format cannot be changed")
+	ErrInvalidValue       = errors.New("dbkv value does not match its format")
 
 	lifecycleMu   sync.Mutex
 	database      atomic.Pointer[gorm.DB]
@@ -152,13 +166,17 @@ func loadSnapshot(ctx context.Context, connection *gorm.DB) (map[string]Entry, e
 	}
 	snapshot := make(map[string]Entry, len(entries))
 	for _, entry := range entries {
-		if !json.Valid([]byte(entry.Value)) {
-			return nil, fmt.Errorf("value for %q must be valid JSON", entry.Key)
+		if _, err := entry.decodeValue(); err != nil {
+			return nil, err
 		}
 		snapshot[entry.Key] = entry
 	}
-	if _, exists := snapshot[LastUpdatedKey]; !exists {
+	marker, exists := snapshot[LastUpdatedKey]
+	if !exists {
 		return nil, fmt.Errorf("dbkv update marker is missing")
+	}
+	if marker.Format != FormatInt64 {
+		return nil, fmt.Errorf("dbkv update marker must have int64 format")
 	}
 	return snapshot, nil
 }
@@ -166,6 +184,9 @@ func loadSnapshot(ctx context.Context, connection *gorm.DB) (map[string]Entry, e
 func createTable(ctx context.Context, connection *gorm.DB) error {
 	migrator := connection.WithContext(ctx).Migrator()
 	if migrator.HasTable(&Entry{}) {
+		if !migrator.HasColumn(&Entry{}, "Format") {
+			return fmt.Errorf("dbkv schema is outdated; drop the dbkv table before restarting")
+		}
 		return nil
 	}
 	return migrator.CreateTable(&Entry{})
@@ -181,8 +202,67 @@ func validateName(name string) error {
 	return nil
 }
 
-func newEntry(name string, value any, description string) (*Entry, error) {
-	// Normalize the key name: trim spaces and convert to lowercase
+func (format Format) CheckFormat(value any) error {
+	switch format {
+	case FormatInt64:
+		if _, valid := value.(int64); valid {
+			return nil
+		}
+	case FormatBool:
+		if _, valid := value.(bool); valid {
+			return nil
+		}
+	case FormatFloat64:
+		if number, valid := value.(float64); valid {
+			if math.IsNaN(number) || math.IsInf(number, 0) {
+				return fmt.Errorf("%w: float64 must be finite", ErrInvalidValue)
+			}
+			return nil
+		}
+	case FormatJSONStr:
+		if text, valid := value.(string); valid {
+			if !json.Valid([]byte(text)) {
+				return fmt.Errorf("%w: json_str must be valid JSON", ErrInvalidValue)
+			}
+			return nil
+		}
+	case FormatString:
+		if _, valid := value.(string); valid {
+			return nil
+		}
+	default:
+		return fmt.Errorf("%w: unsupported format %q", ErrInvalidValue, format)
+	}
+	return fmt.Errorf("%w: %q does not accept %T", ErrInvalidValue, format, value)
+}
+
+func (entry Entry) decodeValue() (any, error) {
+	var value any
+	var err error
+	switch entry.Format {
+	case FormatInt64:
+		value, err = strconv.ParseInt(entry.Value, 10, 64)
+	case FormatBool:
+		if entry.Value != "true" && entry.Value != "false" {
+			err = fmt.Errorf("must be true or false")
+		} else {
+			value = entry.Value == "true"
+		}
+	case FormatFloat64:
+		value, err = strconv.ParseFloat(entry.Value, 64)
+	case FormatJSONStr, FormatString:
+		value = entry.Value
+	}
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid %q value for %q: %w", ErrInvalidValue, entry.Format, entry.Key, err)
+	}
+	if err := entry.Format.CheckFormat(value); err != nil {
+		return nil, fmt.Errorf("value for %q: %w", entry.Key, err)
+	}
+	return value, nil
+}
+
+func newEntry(name string, format Format, value any, description string) (*Entry, error) {
 	name = strings.TrimSpace(name)
 	if err := validateName(name); err != nil {
 		return nil, err
@@ -191,17 +271,25 @@ func newEntry(name string, value any, description string) (*Entry, error) {
 	if name == LastUpdatedKey {
 		return nil, fmt.Errorf("key %q is reserved", name)
 	}
-	// Encode the value as JSON
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return nil, fmt.Errorf("encode value for %q as JSON: %w", name, err)
+	if err := format.CheckFormat(value); err != nil {
+		return nil, fmt.Errorf("value for %q: %w", name, err)
 	}
-	// Create the entry with the encoded value and description
-	return &Entry{Key: name, Value: string(encoded), Description: description, Visible: true}, nil
+	var encoded string
+	switch typedValue := value.(type) {
+	case int64:
+		encoded = strconv.FormatInt(typedValue, 10)
+	case bool:
+		encoded = strconv.FormatBool(typedValue)
+	case float64:
+		encoded = strconv.FormatFloat(typedValue, 'g', -1, 64)
+	case string:
+		encoded = typedValue
+	}
+	return &Entry{Key: name, Format: format, Value: encoded, Description: description, Visible: true}, nil
 }
 
-func Set(ctx context.Context, name string, value any, description string) error {
-	entry, err := newEntry(name, value, description)
+func set(ctx context.Context, name string, format Format, value any, description string) error {
+	entry, err := newEntry(name, format, value, description)
 	if err != nil {
 		return err
 	}
@@ -211,21 +299,26 @@ func Set(ctx context.Context, name string, value any, description string) error 
 	})
 }
 
-func Create(ctx context.Context, name string, value any, description string) error {
-	entry, err := newEntry(name, value, description)
-	if err != nil {
+func upsertEntry(database *gorm.DB, entry *Entry) error {
+	if err := database.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "key"}},
+		DoNothing: true,
+	}).Create(entry).Error; err != nil {
 		return err
 	}
-	return withUpdateMarker(ctx, func(transaction *gorm.DB) error {
-		return transaction.Create(entry).Error
-	})
-}
-
-func upsertEntry(database *gorm.DB, entry *Entry) error {
-	return database.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "key"}},
-		DoUpdates: clause.AssignmentColumns([]string{"value", "description", "visible"}),
-	}).Create(entry).Error
+	var existing Entry
+	if err := database.Clauses(clause.Locking{Strength: "UPDATE"}).
+		Where(clause.Eq{Column: "key", Value: entry.Key}).First(&existing).Error; err != nil {
+		return err
+	}
+	if existing.Format != entry.Format {
+		return fmt.Errorf("%w for %q: stored %q, requested %q", ErrFormatMismatch, entry.Key, existing.Format, entry.Format)
+	}
+	return database.Model(&existing).Updates(map[string]any{
+		"value":       entry.Value,
+		"description": entry.Description,
+		"visible":     entry.Visible,
+	}).Error
 }
 
 func ensureUpdateMarker(database *gorm.DB) error {
@@ -234,6 +327,7 @@ func ensureUpdateMarker(database *gorm.DB) error {
 		DoNothing: true,
 	}).Create(&Entry{
 		Key:         LastUpdatedKey,
+		Format:      FormatInt64,
 		Value:       "0",
 		Description: "Last update time in Unix nanoseconds",
 		Visible:     false,
@@ -251,6 +345,7 @@ func withUpdateMarker(ctx context.Context, change func(*gorm.DB) error) error {
 		}
 		return upsertEntry(transaction, &Entry{
 			Key:         LastUpdatedKey,
+			Format:      FormatInt64,
 			Value:       strconv.FormatInt(time.Now().UnixNano(), 10),
 			Description: "Last update time in Unix nanoseconds",
 			Visible:     false,
@@ -258,14 +353,20 @@ func withUpdateMarker(ctx context.Context, change func(*gorm.DB) error) error {
 	})
 }
 
-func GetFromDB(ctx context.Context, name string) (*Entry, error) {
-	// Normalize the key name: trim spaces and convert to lowercase
+func GetRecordFromDB(ctx context.Context, name string) (*Entry, bool, error) {
 	name = strings.TrimSpace(name)
 	if err := validateName(name); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	name = strings.ToLower(name)
-	return getFromDatabase(ctx, name)
+	entry, err := getFromDatabase(ctx, name)
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return entry, true, nil
 }
 
 func getFromDatabase(ctx context.Context, name string) (*Entry, error) {
@@ -278,30 +379,30 @@ func getFromDatabase(ctx context.Context, name string) (*Entry, error) {
 		Where(clause.Eq{Column: "key", Value: name}).First(&entry).Error; err != nil {
 		return nil, err
 	}
-	if !json.Valid([]byte(entry.Value)) {
-		return nil, fmt.Errorf("value for %q must be valid JSON", name)
+	if _, err := entry.decodeValue(); err != nil {
+		return nil, err
 	}
 	return &entry, nil
 }
 
-func GetRecord(ctx context.Context, name string) (*Entry, error) {
+func GetRecord(ctx context.Context, name string) (*Entry, bool, error) {
 	name = strings.TrimSpace(name)
 	if err := validateName(name); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	name = strings.ToLower(name)
 	if err := ctx.Err(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	snapshot := cache.Load()
 	if snapshot == nil {
-		return nil, ErrNotInitialized
+		return nil, false, ErrNotInitialized
 	}
 	entry, exists := (*snapshot)[name]
 	if !exists {
-		return nil, gorm.ErrRecordNotFound
+		return nil, false, nil
 	}
-	return &entry, nil
+	return &entry, true, nil
 }
 
 func List(ctx context.Context) ([]Entry, error) {
@@ -347,50 +448,42 @@ func Delete(ctx context.Context, name string) error {
 	})
 }
 
-func SetString(ctx context.Context, name, value string, description string) error {
-	return Set(ctx, name, value, description)
+func SetRecord(ctx context.Context, entry Entry) error {
+	value, err := entry.decodeValue()
+	if err != nil {
+		return err
+	}
+	return set(ctx, entry.Key, entry.Format, value, entry.Description)
 }
 
-func GetString(ctx context.Context, name string) (string, error) {
-	return Get[string](ctx, name)
+func SetString(ctx context.Context, name, value string, description string) error {
+	return set(ctx, name, FormatString, value, description)
 }
 
 func SetInt64(ctx context.Context, name string, value int64, description string) error {
-	return Set(ctx, name, value, description)
-}
-
-func GetInt64(ctx context.Context, name string) (int64, error) {
-	return Get[int64](ctx, name)
+	return set(ctx, name, FormatInt64, value, description)
 }
 
 func SetBool(ctx context.Context, name string, value bool, description string) error {
-	return Set(ctx, name, value, description)
-}
-
-func GetBool(ctx context.Context, name string) (bool, error) {
-	return Get[bool](ctx, name)
+	return set(ctx, name, FormatBool, value, description)
 }
 
 func SetFloat64(ctx context.Context, name string, value float64, description string) error {
-	return Set(ctx, name, value, description)
+	return set(ctx, name, FormatFloat64, value, description)
 }
 
-func GetFloat64(ctx context.Context, name string) (float64, error) {
-	return Get[float64](ctx, name)
+func SetJSONStr(ctx context.Context, name, value string, description string) error {
+	return set(ctx, name, FormatJSONStr, value, description)
 }
 
-func Get[ValueType any](ctx context.Context, name string) (ValueType, error) {
-	var zero ValueType
-	entry, err := GetRecord(ctx, name)
+func Get(ctx context.Context, name string) (any, bool, error) {
+	entry, exists, err := GetRecord(ctx, name)
+	if err != nil || !exists {
+		return nil, false, err
+	}
+	value, err := entry.decodeValue()
 	if err != nil {
-		return zero, err
+		return nil, false, err
 	}
-	var decoded *ValueType
-	if err := json.Unmarshal([]byte(entry.Value), &decoded); err != nil {
-		return zero, fmt.Errorf("decode value for %q: %w", name, err)
-	}
-	if decoded == nil {
-		return zero, fmt.Errorf("key %q must contain a non-null value", name)
-	}
-	return *decoded, nil
+	return value, true, nil
 }

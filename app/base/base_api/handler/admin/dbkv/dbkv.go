@@ -2,17 +2,16 @@ package dbkv
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/LazyEasyDev/LZApp/app/base/base_api/middleware"
 	store "github.com/LazyEasyDev/LZApp/app/base/dbkv"
 	"github.com/LazyEasyDev/LZApp/app/base/users"
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
 )
 
@@ -25,16 +24,13 @@ type ListOutput struct {
 }
 
 type RecordBody struct {
-	Key         string `json:"key" minLength:"1" maxLength:"191"`
-	Value       string `json:"value" minLength:"1"`
-	Description string `json:"description"`
+	Key         string       `json:"key" minLength:"1" maxLength:"191"`
+	Format      store.Format `json:"format" enum:"int64,bool,float64,json_str,string"`
+	Value       string       `json:"value"`
+	Description string       `json:"description"`
 }
 
-type CreateInput struct {
-	Body RecordBody
-}
-
-type UpdateInput struct {
+type SetInput struct {
 	Body RecordBody
 }
 
@@ -68,22 +64,13 @@ func RegisterRoutes(api huma.API) {
 		Middlewares: readMiddleware,
 	}, ListHandler)
 	huma.Register(api, huma.Operation{
-		OperationID:   "post-admin-dbkv-create",
-		Summary:       "Create a DBKV record",
-		Method:        http.MethodPost,
-		Path:          "/admin/dbkv/create",
-		DefaultStatus: http.StatusCreated,
-		Tags:          []string{"Admin DBKV"},
-		Middlewares:   writeMiddleware,
-	}, CreateHandler)
-	huma.Register(api, huma.Operation{
-		OperationID: "post-admin-dbkv-update",
-		Summary:     "Update a DBKV record",
+		OperationID: "post-admin-dbkv-set",
+		Summary:     "Set a DBKV record without changing its format",
 		Method:      http.MethodPost,
-		Path:        "/admin/dbkv/update",
+		Path:        "/admin/dbkv/set",
 		Tags:        []string{"Admin DBKV"},
 		Middlewares: writeMiddleware,
-	}, UpdateHandler)
+	}, SetHandler)
 	huma.Register(api, huma.Operation{
 		OperationID: "post-admin-dbkv-del",
 		Summary:     "Delete a DBKV record",
@@ -107,42 +94,38 @@ func ListHandler(ctx context.Context, _ *ListInput) (*ListOutput, error) {
 	return output, nil
 }
 
-func CreateHandler(ctx context.Context, input *CreateInput) (*WriteOutput, error) {
+func SetHandler(ctx context.Context, input *SetInput) (*WriteOutput, error) {
 	key := strings.TrimSpace(input.Body.Key)
-	if key == "" {
-		return nil, huma.Error400BadRequest("key is required")
+	if key == "" || !utf8.ValidString(key) || utf8.RuneCountInString(key) > 191 {
+		return nil, huma.Error400BadRequest("key must contain 1-191 valid UTF-8 characters")
 	}
 	if strings.EqualFold(key, store.LastUpdatedKey) {
 		return nil, huma.Error400BadRequest("key is reserved")
 	}
-	if !json.Valid([]byte(input.Body.Value)) {
-		return nil, huma.Error400BadRequest("value must be valid JSON")
-	}
-	if err := store.Create(ctx, key, json.RawMessage(input.Body.Value), input.Body.Description); err != nil {
-		var mysqlError *mysql.MySQLError
-		if errors.Is(err, gorm.ErrDuplicatedKey) || errors.As(err, &mysqlError) && mysqlError.Number == 1062 {
-			return nil, huma.Error409Conflict("DBKV key already exists")
-		}
-		return nil, huma.Error503ServiceUnavailable("DBKV create is unavailable")
-	}
-	output := &WriteOutput{}
-	output.Body.Message = "DBKV record created"
-	return output, nil
-}
-
-func UpdateHandler(ctx context.Context, input *UpdateInput) (*WriteOutput, error) {
-	if !json.Valid([]byte(input.Body.Value)) {
-		return nil, huma.Error400BadRequest("value must be valid JSON")
-	}
-	entry, err := editableEntry(ctx, input.Body.Key)
+	entry, exists, err := store.GetRecordFromDB(ctx, key)
 	if err != nil {
-		return nil, err
+		return nil, huma.Error503ServiceUnavailable("DBKV record is unavailable")
 	}
-	if err := store.Set(ctx, entry.Key, json.RawMessage(input.Body.Value), input.Body.Description); err != nil {
-		return nil, huma.Error503ServiceUnavailable("DBKV update is unavailable")
+	if exists && !entry.Visible {
+		return nil, huma.Error404NotFound("DBKV record not found")
+	}
+	err = store.SetRecord(ctx, store.Entry{
+		Key:         key,
+		Format:      input.Body.Format,
+		Value:       input.Body.Value,
+		Description: input.Body.Description,
+	})
+	if errors.Is(err, store.ErrInvalidValue) {
+		return nil, huma.Error400BadRequest(err.Error())
+	}
+	if errors.Is(err, store.ErrFormatMismatch) {
+		return nil, huma.Error409Conflict(err.Error())
+	}
+	if err != nil {
+		return nil, huma.Error503ServiceUnavailable("DBKV save is unavailable")
 	}
 	output := &WriteOutput{}
-	output.Body.Message = "DBKV record updated"
+	output.Body.Message = "DBKV record saved"
 	return output, nil
 }
 
@@ -165,14 +148,11 @@ func editableEntry(ctx context.Context, key string) (*store.Entry, error) {
 	if strings.TrimSpace(key) == "" {
 		return nil, huma.Error400BadRequest("key is required")
 	}
-	entry, err := store.GetFromDB(ctx, key)
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, huma.Error404NotFound("DBKV record not found")
-	}
+	entry, exists, err := store.GetRecordFromDB(ctx, key)
 	if err != nil {
 		return nil, huma.Error503ServiceUnavailable("DBKV record is unavailable")
 	}
-	if !entry.Visible || entry.Key == store.LastUpdatedKey {
+	if !exists || !entry.Visible || entry.Key == store.LastUpdatedKey {
 		return nil, huma.Error404NotFound("DBKV record not found")
 	}
 	return entry, nil
