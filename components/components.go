@@ -13,6 +13,7 @@ import (
 	"github.com/LazyEasyDev/LZApp/components/easyroutine"
 	"github.com/LazyEasyDev/LZApp/components/easystatistics"
 	"github.com/LazyEasyDev/LZApp/components/email"
+	"github.com/LazyEasyDev/LZApp/components/geoip"
 	"github.com/LazyEasyDev/LZApp/components/gormdb"
 	"github.com/LazyEasyDev/LZApp/components/httpserver"
 	"github.com/LazyEasyDev/LZApp/components/lcache"
@@ -197,6 +198,12 @@ func Init(ctx context.Context, appConfig *config.AppConfig) error {
 	if err := InitSecurity(appConfig.SecurityHMAC, appConfig.SecurityBcrypt); err != nil {
 		slog.Error("failed to initialize security:" + err.Error())
 		return fmt.Errorf("initialize security: %w", err)
+	}
+
+	// Initialize the GeoIP component
+	if err := geoip.Init(); err != nil {
+		slog.Error("failed to initialize GeoIP:" + err.Error())
+		return fmt.Errorf("initialize GeoIP: %w", err)
 	}
 
 	// Initialize the local cache

@@ -4,10 +4,10 @@ github.com/LazyEasyDev/EasyLog v0.0.0-20260925132759-daa542d7b335 h1:+084xK9qD5l
 github.com/LazyEasyDev/EasyLog v0.0.0-20260925132759-daa542d7b335/go.mod h1:SYuuIl2CxygK/A0NMkCtmHHfkm20KsGR8F+y3YpqBAM=
 github.com/LazyEasyDev/EasyRoutine v0.0.0-20261013111825-9cbeead7fe65 h1:zylSG9j5Svj6NbKcCDOetp+/Q9YqrWg50gUPiYmH5gs=
 github.com/LazyEasyDev/EasyRoutine v0.0.0-20261013111825-9cbeead7fe65/go.mod h1:uDUb4Dm9jhx7UD/vweQnS9kHBVUvzR6o1GkOp2l6jvM=
-github.com/LazyEasyDev/EasyStatistics v0.0.0-20261013151951-56b6c159a318 h1:Uo/NzMNnK1dUBCwAWoUN9tdu4fhwjP+nc8zD3fCPpng=
-github.com/LazyEasyDev/EasyStatistics v0.0.0-20261013151951-56b6c159a318/go.mod h1:6xapVJUrWcRM+28LBqq1OoOkNCBNGImN3E58a7NccJo=
 github.com/LazyEasyDev/EasyStatistics v0.0.0-20261014053927-77178ec5ec05 h1:SndC3mX4Ovn65O3+skK45SK1+01vvccNKN89bc53gyg=
 github.com/LazyEasyDev/EasyStatistics v0.0.0-20261014053927-77178ec5ec05/go.mod h1:6xapVJUrWcRM+28LBqq1OoOkNCBNGImN3E58a7NccJo=
+github.com/LazyEasyDev/GeoIP v0.0.0-20261016105344-59b09d7f3a7c h1:EDEr25tIeNHHHdyXztR3LeG9nHrxuPo7o9cxjfTnl8U=
+github.com/LazyEasyDev/GeoIP v0.0.0-20261016105344-59b09d7f3a7c/go.mod h1:nlaAAKUZDFDUSAyMGyK/rJTZAXmHLcTBjQcFj7X8esg=
 github.com/LazyEasyDev/LCache v0.0.0-20261011100739-7aa13ebea625 h1:SiOjzWTS7/0OE5wBHErC2U4h0LA61fLN8fBkLZDl/xc=
 github.com/LazyEasyDev/LCache v0.0.0-20261011100739-7aa13ebea625/go.mod h1:YwEHM8EfJgyqs+SHiHM6SHmhbVh3XfdBCZZiKwsjlM0=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=
