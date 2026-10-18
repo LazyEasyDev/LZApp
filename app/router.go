@@ -8,6 +8,7 @@ import (
 	admineasyroutine "github.com/LazyEasyDev/LZApp/app/base/base_api/handler/admin/easyroutine"
 	admineasystatistics "github.com/LazyEasyDev/LZApp/app/base/base_api/handler/admin/easystatistics"
 	adminusers "github.com/LazyEasyDev/LZApp/app/base/base_api/handler/admin/users"
+	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler/am/refstatistics"
 	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler/docs"
 	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler/user"
 	"github.com/LazyEasyDev/LZApp/app/base/base_api/middleware"
@@ -35,6 +36,7 @@ func registerRoutes(api huma.API) {
 	admineasyroutine.RegisterRoutes(api)
 	admineasystatistics.RegisterRoutes(api)
 	user.RegisterRoutes(api)
+	refstatistics.RegisterRoutes(api)
 
 	// Additional routes can be registered here
 

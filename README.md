@@ -7,6 +7,24 @@ The HTTP configuration in [config/profile.go](config/profile.go) defines
 (`api_version`, default `1.0.0`). These values populate the OpenAPI API title
 and version. Both must be non-empty; changing them does not change route paths.
 
+## AM referral statistics
+
+`GET /am/refstatistics/list` returns paginated registration counts grouped by
+`ref_userid` and case-sensitive `ref_channel`. Results always exclude null or
+zero referring user IDs. Registration guarantees a valid channel for each
+attributed referring user ID.
+
+- Access requires `admin`, `viewall`, or `am`.
+- AM-only accounts are restricted to their own user ID. Requesting another
+  referring user ID returns HTTP 403.
+- `admin` and `viewall` accounts may filter by any referring user ID or omit
+  it to include all attributed referrers, including when they also have `am`.
+- An empty `ref_channel` includes all channels; otherwise matching is exact
+  and case-sensitive.
+- `page` defaults to 1; `page_size` defaults to 20 and is limited to 100.
+- Each item contains `ref_userid`, `ref_channel`, and `count`. `total` counts
+  matching groups, not individual registrations.
+
 ## Deployment: direct client IP and rate limiting
 
 LZApp is designed to receive HTTPS connections directly, without an
