@@ -242,6 +242,10 @@ func Init(ctx context.Context, appConfig *config.AppConfig) error {
 	slog.Info("EasyStatistics initialized successfully")
 
 	// Initialize the HTTP server if enabled
+	if err := appConfig.HTTP.ValidateCookieMaxAge(); err != nil {
+		slog.Error("invalid HTTP cookie max age:" + err.Error())
+		return fmt.Errorf("validate HTTP cookie max age: %w", err)
+	}
 	if err := InitHttpServer(appConfig.HTTP); err != nil {
 		slog.Error("failed to initialize HTTP server:" + err.Error())
 		return fmt.Errorf("initialize HTTP server: %w", err)

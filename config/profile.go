@@ -54,7 +54,10 @@ func newDefaultConfig() AppConfig {
 		},
 		////optional
 		HTTP: &http_config.HTTPConfig{
+			APITitle:                 "LZApp API",
+			APIVersion:               "1.0.0",
 			APITokenCookieName:       "api_token",
+			CookieMaxAgeSeconds:      30 * 24 * 60 * 60,
 			HTTPSPort:                443,
 			HTTPSCertificate:         http_config.HTTPSCertificatePEM,
 			HTTPSKey:                 http_config.HTTPSPrivateKeyPEM,

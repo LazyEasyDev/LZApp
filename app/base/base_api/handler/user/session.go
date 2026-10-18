@@ -76,6 +76,12 @@ type CaptchaOutput struct {
 	}
 }
 
+type PublicConfigOutput struct {
+	Body struct {
+		CookieMaxAgeSeconds int `json:"cookie_max_age_seconds"`
+	}
+}
+
 type CookieInput struct {
 	Cookies []*http.Cookie `json:"-"`
 }
@@ -105,6 +111,18 @@ func messageOutput(message string) *MessageOutput {
 }
 
 func RegisterRoutes(api huma.API) {
+	huma.Register(api, huma.Operation{
+		OperationID: "get-user-config",
+		Summary:     "Get public browser cookie configuration",
+		Method:      http.MethodGet,
+		Path:        "/user/config",
+		Tags:        []string{"User"},
+		Security:    []map[string][]string{},
+		Middlewares: huma.Middlewares{
+			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 60, Window: time.Minute}),
+		},
+	}, PublicConfigHandler)
+
 	huma.Register(api, huma.Operation{
 		OperationID: "get-user",
 		Summary:     "Get user",
@@ -204,6 +222,9 @@ func tokenCookie(token string) (http.Cookie, error) {
 	if token == "" {
 		cookie.MaxAge = -1
 		cookie.Expires = time.Unix(1, 0)
+	} else {
+		cookie.MaxAge = settings.CookieMaxAgeSeconds
+		cookie.Expires = time.Now().Add(time.Duration(cookie.MaxAge) * time.Second)
 	}
 	if err := cookie.Valid(); err != nil {
 		return http.Cookie{}, huma.Error500InternalServerError("invalid cookie configuration")
@@ -269,6 +290,16 @@ func CaptchaHandler(_ context.Context, _ *struct{}) (*CaptchaOutput, error) {
 	return output, nil
 }
 
+func PublicConfigHandler(_ context.Context, _ *struct{}) (*PublicConfigOutput, error) {
+	settings := config.GetConfig().HTTP
+	if err := settings.ValidateCookieMaxAge(); err != nil {
+		return nil, huma.Error500InternalServerError("invalid cookie configuration")
+	}
+	output := &PublicConfigOutput{}
+	output.Body.CookieMaxAgeSeconds = settings.CookieMaxAgeSeconds
+	return output, nil
+}
+
 func normalizeEmail(email string) (string, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	address, err := mail.ParseAddress(email)
@@ -311,10 +342,30 @@ func LoginHandler(ctx context.Context, input *LoginInput) (*UserOutput, error) {
 	if err != nil || !valid {
 		return nil, huma.Error401Unauthorized("invalid email or password")
 	}
-	return signedInOutput(account)
+	output, err := signedInOutput(account)
+	if err != nil {
+		return nil, err
+	}
+	updated := *account
+	if err := users.RecordLogin(ctx, &updated); err != nil {
+		return nil, huma.Error503ServiceUnavailable("login is unavailable")
+	}
+	output.Body = publicUser(&updated)
+	return output, nil
 }
 
-func RegisterHandler(ctx context.Context, input *RegisterInput) (*UserOutput, error) {
+func RegisterHandler(ctx context.Context, input *RegisterInput) (output *UserOutput, err error) {
+	refUserID, refChannel, err := verifiedRef(ctx, input.Body.Ref)
+	if err != nil {
+		return nil, huma.Error503ServiceUnavailable("referral validation is unavailable")
+	}
+	if input.Body.Ref != "" && refUserID == 0 {
+		defer func() {
+			if err != nil {
+				err = huma.ErrorWithHeaders(err, http.Header{"X-Clear-Referral": {"true"}})
+			}
+		}()
+	}
 	if err := verifyCaptcha(input.Body.CaptchaProof); err != nil {
 		return nil, err
 	}
@@ -325,7 +376,6 @@ func RegisterHandler(ctx context.Context, input *RegisterInput) (*UserOutput, er
 	if err := validateNewPassword(input.Body.Password); err != nil {
 		return nil, err
 	}
-	ref, _ := verifiedRef(ctx, input.Body.Ref)
 	if err := verifyEmailCode(ctx, email, "register", input.Body.EmailCode); err != nil {
 		return nil, err
 	}
@@ -340,7 +390,11 @@ func RegisterHandler(ctx context.Context, input *RegisterInput) (*UserOutput, er
 	access, _ := json.Marshal([]string{users.ACCESS_USER})
 	account := &users.User{
 		Name: input.Body.Name, Email: email, Password: password, ApiToken: token, Access: string(access),
-		Ref: ref, RegIP: middleware.GetClientIP(ctx),
+		RegIP: middleware.GetClientIP(ctx),
+	}
+	if refUserID != 0 {
+		account.RefUserID = &refUserID
+		account.RefChannel = &refChannel
 	}
 	if err := users.Create(ctx, account); err != nil {
 		return nil, huma.Error503ServiceUnavailable(err.Error())

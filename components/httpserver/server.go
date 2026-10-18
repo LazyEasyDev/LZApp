@@ -14,7 +14,6 @@ import (
 	"math/big"
 	"net"
 	"net/http"
-	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -43,13 +42,15 @@ func New(httpConfig *http_config.HTTPConfig) (*Server, error) {
 	if httpConfig == nil {
 		return nil, fmt.Errorf("HTTP configuration is required")
 	}
+	if strings.TrimSpace(httpConfig.APITitle) == "" {
+		return nil, fmt.Errorf("api_title must not be empty")
+	}
+	if strings.TrimSpace(httpConfig.APIVersion) == "" {
+		return nil, fmt.Errorf("api_version must not be empty")
+	}
+
 	if httpConfig.HTTPSPort < 1 || httpConfig.HTTPSPort > 65535 {
 		return nil, fmt.Errorf("HTTPS port must be between 1 and 65535")
-	}
-	for _, value := range httpConfig.TrustedProxyCIDRs {
-		if _, err := netip.ParsePrefix(value); err != nil {
-			return nil, fmt.Errorf("invalid trusted proxy CIDR %q: %w", value, err)
-		}
 	}
 	const maxTimeoutSeconds = int64((1<<63 - 1) / time.Second)
 	for _, timeout := range []struct {
@@ -81,6 +82,7 @@ func New(httpConfig *http_config.HTTPConfig) (*Server, error) {
 		AllowOriginFunc:  func(string) bool { return true },
 		AllowCredentials: true,
 		AllowedHeaders:   []string{"*"},
+		ExposedHeaders:   []string{"X-Clear-Referral"},
 	}).Handler)
 
 	// Override Huma's default error handling and summary generation functions
@@ -89,7 +91,7 @@ func New(httpConfig *http_config.HTTPConfig) (*Server, error) {
 		return path
 	}
 	// Initialize Huma API with the router and configuration
-	apiConfig := huma.DefaultConfig("LZApp API", "1.0.0")
+	apiConfig := huma.DefaultConfig(httpConfig.APITitle, httpConfig.APIVersion)
 	apiConfig.Components.SecuritySchemes = map[string]*huma.SecurityScheme{
 		"bearerAuth": {
 			Type:   "http",

@@ -21,25 +21,28 @@ import (
 )
 
 type PublicUser struct {
-	ID        uint64    `json:"id"`
-	Name      *string   `json:"name"`
-	Email     string    `json:"email"`
-	Access    []string  `json:"access"`
-	Ref       string    `json:"ref"`
-	RegIP     string    `json:"reg_ip"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID         uint64     `json:"id"`
+	Name       *string    `json:"name"`
+	Email      string     `json:"email"`
+	Access     []string   `json:"access"`
+	RefUserID  *uint64    `json:"ref_userid"`
+	RefChannel *string    `json:"ref_channel"`
+	LastLogin  *time.Time `json:"last_login"`
+	RegIP      string     `json:"reg_ip"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
 type ListInput struct {
-	ID       uint64 `query:"id" minimum:"1"`
-	Name     string `query:"name" maxLength:"100"`
-	Email    string `query:"email" maxLength:"254"`
-	Access   string `query:"access" enum:"user,admin,viewall,am"`
-	Ref      string `query:"ref" maxLength:"26"`
-	RegIP    string `query:"reg_ip" maxLength:"45"`
-	Page     int    `query:"page" minimum:"1" default:"1"`
-	PageSize int    `query:"page_size" minimum:"1" maximum:"100" default:"20"`
+	ID         uint64 `query:"id" minimum:"1"`
+	Name       string `query:"name" maxLength:"100"`
+	Email      string `query:"email" maxLength:"254"`
+	Access     string `query:"access" enum:"user,admin,viewall,am"`
+	RefUserID  uint64 `query:"ref_userid" minimum:"1"`
+	RefChannel string `query:"ref_channel" maxLength:"32"`
+	RegIP      string `query:"reg_ip" maxLength:"45"`
+	Page       int    `query:"page" minimum:"1" default:"1"`
+	PageSize   int    `query:"page_size" minimum:"1" maximum:"100" default:"20"`
 }
 
 type ListOutput struct {
@@ -115,15 +118,19 @@ func RegisterRoutes(api huma.API) {
 }
 
 func ListHandler(ctx context.Context, input *ListInput) (*ListOutput, error) {
+	if input.RefChannel != "" && input.RefUserID == 0 {
+		return nil, huma.Error400BadRequest("referring user ID is required when filtering by referral channel")
+	}
 	if input.Page > math.MaxInt/input.PageSize {
 		return nil, huma.Error400BadRequest("page is too large")
 	}
 	filter := accounts.ListFilter{
-		Name:   strings.TrimSpace(input.Name),
-		Email:  strings.TrimSpace(input.Email),
-		Access: input.Access,
-		Ref:    strings.TrimSpace(input.Ref),
-		RegIP:  strings.TrimSpace(input.RegIP),
+		Name:       strings.TrimSpace(input.Name),
+		Email:      strings.TrimSpace(input.Email),
+		Access:     input.Access,
+		RefUserID:  input.RefUserID,
+		RefChannel: input.RefChannel,
+		RegIP:      strings.TrimSpace(input.RegIP),
 	}
 	if input.ID != 0 {
 		filter.ID = input.ID
@@ -227,14 +234,16 @@ func publicUser(account *accounts.User) (PublicUser, error) {
 		return PublicUser{}, errors.New("invalid access")
 	}
 	return PublicUser{
-		ID:        account.ID,
-		Name:      account.Name,
-		Email:     account.Email,
-		Access:    access,
-		Ref:       account.Ref,
-		RegIP:     account.RegIP,
-		CreatedAt: account.CreatedAt,
-		UpdatedAt: account.UpdatedAt,
+		ID:         account.ID,
+		Name:       account.Name,
+		Email:      account.Email,
+		Access:     access,
+		RefUserID:  account.RefUserID,
+		RefChannel: account.RefChannel,
+		LastLogin:  account.LastLogin,
+		RegIP:      account.RegIP,
+		CreatedAt:  account.CreatedAt,
+		UpdatedAt:  account.UpdatedAt,
 	}, nil
 }
 

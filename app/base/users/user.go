@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -18,16 +17,18 @@ import (
 )
 
 type User struct {
-	ID        uint64    `gorm:"primaryKey" json:"id"`
-	Name      *string   `gorm:"size:100" json:"name"`
-	Email     string    `gorm:"size:254;not null;uniqueIndex" json:"email"`
-	Password  string    `gorm:"size:128;not null" json:"password"`
-	ApiToken  string    `gorm:"size:128;not null;uniqueIndex" json:"api_token"`
-	Access    string    `gorm:"type:text" json:"access"`
-	Ref       string    `gorm:"size:26;index" json:"ref"`
-	RegIP     string    `gorm:"size:45" json:"reg_ip,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID         uint64     `gorm:"primaryKey" json:"id"`
+	Name       *string    `gorm:"size:100" json:"name"`
+	Email      string     `gorm:"size:254;not null;uniqueIndex" json:"email"`
+	Password   string     `gorm:"size:128;not null" json:"password"`
+	ApiToken   string     `gorm:"size:128;not null;uniqueIndex" json:"api_token"`
+	Access     string     `gorm:"type:text" json:"access"`
+	RefUserID  *uint64    `gorm:"column:ref_userid;index" json:"ref_userid"`
+	RefChannel *string    `gorm:"size:32" json:"ref_channel"`
+	LastLogin  *time.Time `gorm:"index" json:"last_login"`
+	RegIP      string     `gorm:"size:45" json:"reg_ip,omitempty"`
+	CreatedAt  time.Time  `json:"created_at"`
+	UpdatedAt  time.Time  `json:"updated_at"`
 }
 
 func CreateTable(ctx context.Context) error {
@@ -149,13 +150,14 @@ func getByApiToken(ctx context.Context, apiToken string, database *gorm.DB, cach
 }
 
 type ListFilter struct {
-	ID       uint64
-	Name     string
-	Email    string
-	ApiToken string
-	Access   string
-	Ref      string
-	RegIP    string
+	ID         uint64
+	Name       string
+	Email      string
+	ApiToken   string
+	Access     string
+	RefUserID  uint64
+	RefChannel string
+	RegIP      string
 }
 
 func applyListFilter(query *gorm.DB, filter ListFilter) *gorm.DB {
@@ -175,14 +177,11 @@ func applyListFilter(query *gorm.DB, filter ListFilter) *gorm.DB {
 	if filter.Access != "" {
 		query = query.Where("access LIKE ?", "%\""+escape.Replace(filter.Access)+"\"%")
 	}
-	if filter.Ref != "" {
-		if strings.Contains(filter.Ref, ":") {
-			query = query.Where("ref = ?", filter.Ref)
-		} else if _, err := strconv.ParseUint(filter.Ref, 10, 64); err == nil {
-			query = query.Where("ref LIKE ? ESCAPE '!'", filter.Ref+":%")
-		} else {
-			query = query.Where("ref LIKE ? ESCAPE '!'", "%:"+escape.Replace(filter.Ref))
-		}
+	if filter.RefUserID != 0 {
+		query = query.Where("ref_userid = ?", filter.RefUserID)
+	}
+	if filter.RefChannel != "" {
+		query = query.Where("BINARY ref_channel = ?", filter.RefChannel)
 	}
 	if filter.RegIP != "" {
 		query = query.Where("reg_ip = ?", filter.RegIP)
@@ -203,7 +202,7 @@ func List(ctx context.Context, filter ListFilter, limit, offset int) ([]User, er
 
 	var users []User
 	err := applyListFilter(components.GetDB().WithContext(ctx), filter).
-		Select("id", "name", "email", "access", "ref", "reg_ip", "created_at", "updated_at").
+		Select("id", "name", "email", "access", "ref_userid", "ref_channel", "last_login", "reg_ip", "created_at", "updated_at").
 		Order("id ASC").
 		Limit(limit).
 		Offset(offset).
@@ -259,6 +258,29 @@ func create(ctx context.Context, user *User, database *gorm.DB, cache *redis.Cli
 
 func Update(ctx context.Context, user *User) error {
 	return update(ctx, user, components.GetDB(), components.GetRedis())
+}
+
+func RecordLogin(ctx context.Context, user *User) error {
+	if user == nil || user.ID == 0 {
+		return fmt.Errorf("user with an ID is required")
+	}
+	database := components.GetDB()
+	now := time.Now().UTC()
+	result := database.WithContext(ctx).Model(&User{}).
+		Where("id = ? AND (last_login IS NULL OR last_login < ?)", user.ID, now.Add(-5*time.Minute)).
+		UpdateColumn("last_login", now)
+	if result.Error != nil {
+		return result.Error
+	}
+	var current User
+	if err := database.WithContext(ctx).Select("id", "last_login").First(&current, user.ID).Error; err != nil {
+		return err
+	}
+	user.LastLogin = current.LastLogin
+	if result.RowsAffected > 0 {
+		refreshUserCache(ctx, database, components.GetRedis(), user)
+	}
+	return nil
 }
 
 func update(ctx context.Context, user *User, database *gorm.DB, cache *redis.Client) error {
