@@ -13,8 +13,6 @@ import (
 	accounts "github.com/LazyEasyDev/LZApp/app/users"
 	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/danielgtaylor/huma/v2"
-	"github.com/go-sql-driver/mysql"
-	"gorm.io/gorm"
 )
 
 type PublicUser struct {
@@ -185,9 +183,16 @@ func CreateHandler(ctx context.Context, input *CreateInput) (*UserOutput, error)
 		Access:   access,
 	}
 	if err := accounts.Create(ctx, account); err != nil {
-		return nil, writeError(err)
+		if errors.Is(err, accounts.ErrEmailAlreadyRegistered) {
+			return nil, huma.Error409Conflict("email address is already registered")
+		}
+		return nil, huma.Error503ServiceUnavailable("user write is unavailable")
 	}
-	return userOutput(account)
+	user, err := publicUser(account)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("stored user access is invalid")
+	}
+	return &UserOutput{Body: user}, nil
 }
 
 func UpdateHandler(ctx context.Context, input *UpdateInput) (*UserOutput, error) {
@@ -220,9 +225,16 @@ func UpdateHandler(ctx context.Context, input *UpdateInput) (*UserOutput, error)
 		}
 	}
 	if err := accounts.Update(ctx, &updated); err != nil {
-		return nil, writeError(err)
+		if errors.Is(err, accounts.ErrEmailAlreadyRegistered) {
+			return nil, huma.Error409Conflict("email address is already registered")
+		}
+		return nil, huma.Error503ServiceUnavailable("user write is unavailable")
 	}
-	return userOutput(&updated)
+	user, err := publicUser(&updated)
+	if err != nil {
+		return nil, huma.Error500InternalServerError("stored user access is invalid")
+	}
+	return &UserOutput{Body: user}, nil
 }
 
 func publicUser(account *accounts.User) (PublicUser, error) {
@@ -242,14 +254,6 @@ func publicUser(account *accounts.User) (PublicUser, error) {
 		CreatedAt:  account.CreatedAt,
 		UpdatedAt:  account.UpdatedAt,
 	}, nil
-}
-
-func userOutput(account *accounts.User) (*UserOutput, error) {
-	user, err := publicUser(account)
-	if err != nil {
-		return nil, huma.Error500InternalServerError("stored user access is invalid")
-	}
-	return &UserOutput{Body: user}, nil
 }
 
 func normalizeName(name *string) *string {
@@ -287,12 +291,4 @@ func encodeAccess(values []string) (string, error) {
 		return "", huma.Error400BadRequest("invalid access permission")
 	}
 	return encoded, nil
-}
-
-func writeError(err error) error {
-	var mysqlError *mysql.MySQLError
-	if errors.Is(err, gorm.ErrDuplicatedKey) || errors.As(err, &mysqlError) && mysqlError.Number == 1062 {
-		return huma.Error409Conflict("email address is already registered")
-	}
-	return huma.Error503ServiceUnavailable("user write is unavailable")
 }

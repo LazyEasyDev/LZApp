@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/LazyEasyDev/LZApp/common/cache_helper"
 	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/LazyEasyDev/LZApp/components/redis"
+	"github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -213,6 +215,22 @@ func Create(ctx context.Context, user *User) error {
 	return create(ctx, user, components.GetDB(), components.GetRedis())
 }
 
+var (
+	ErrEmailAlreadyRegistered = errors.New("email is already registered")
+	ErrWriteUnavailable       = errors.New("user write is unavailable")
+)
+
+func userWriteError(err error) error {
+	var mysqlError *mysql.MySQLError
+	if errors.As(err, &mysqlError) && mysqlError.Number == 1062 &&
+		(strings.HasSuffix(mysqlError.Message, "for key 'users.idx_users_email'") ||
+			strings.HasSuffix(mysqlError.Message, "for key 'idx_users_email'")) {
+		return ErrEmailAlreadyRegistered
+	}
+	slog.Error("failed to write user", "error", err)
+	return ErrWriteUnavailable
+}
+
 func create(ctx context.Context, user *User, database *gorm.DB, cache *redis.Client) error {
 	if user == nil {
 		return fmt.Errorf("user is required")
@@ -223,7 +241,7 @@ func create(ctx context.Context, user *User, database *gorm.DB, cache *redis.Cli
 	}
 	user.Access = access
 	if err := database.WithContext(ctx).Create(user).Error; err != nil {
-		return err
+		return userWriteError(err)
 	}
 	refreshUserCache(ctx, database, cache, user)
 	return nil
@@ -282,7 +300,7 @@ func update(ctx context.Context, user *User, database *gorm.DB, cache *redis.Cli
 			Updates(updates).Error
 	})
 	if err != nil {
-		return err
+		return userWriteError(err)
 	}
 	refreshUserCache(ctx, database, cache, &previous, user)
 	return nil

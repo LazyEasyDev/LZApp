@@ -29,6 +29,14 @@ Request validation errors include an optional `errors` array with `location` and
 `message` for each failed rule. Rejected values and unstructured underlying errors
 are not included. Additional diagnostics are limited to HTTP 400/422 responses;
 authentication and server errors retain their existing summary-only format.
+Password-reset code requests return HTTP 400 with `email is not registered`
+when no account exists, before starting the email cooldown or sending mail.
+Registration code requests return HTTP 409 with `email is already registered`
+when an account already exists, also before starting the cooldown or sending mail.
+User writes identify email conflicts with `users.ErrEmailAlreadyRegistered` and
+other database failures with `users.ErrWriteUnavailable`. Registration and admin
+user handlers map email conflicts to HTTP 409 and other write failures to HTTP
+503, without returning database details.
 
 The [base](base/) directory contains the functionality shared across applications:
 

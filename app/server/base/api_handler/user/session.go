@@ -393,7 +393,10 @@ func RegisterHandler(ctx context.Context, input *RegisterInput) (output *UserOut
 		account.RefChannel = &refChannel
 	}
 	if err := users.Create(ctx, account); err != nil {
-		return nil, huma.Error503ServiceUnavailable(err.Error())
+		if errors.Is(err, users.ErrEmailAlreadyRegistered) {
+			return nil, huma.Error409Conflict("email is already registered")
+		}
+		return nil, huma.Error503ServiceUnavailable("registration is unavailable")
 	}
 	return signedInOutput(account)
 }
@@ -431,7 +434,7 @@ func ResetPasswordHandler(ctx context.Context, input *ResetPasswordInput) (*Mess
 	updated.Password = password
 	updated.APIToken = token
 	if err := users.Update(ctx, &updated); err != nil {
-		return nil, huma.Error503ServiceUnavailable(err.Error())
+		return nil, huma.Error503ServiceUnavailable("password reset is unavailable")
 	}
 	output, err := LogoutHandler(ctx, &input.CookieInput)
 	if err != nil {
@@ -455,6 +458,19 @@ func EmailCodeHandler(ctx context.Context, input *EmailCodeInput) (*MessageOutpu
 	}
 	if input.Body.Purpose != "register" && input.Body.Purpose != "reset_password" {
 		return nil, huma.Error400BadRequest("invalid verification purpose")
+	}
+	_, exists, err := users.GetByEmail(ctx, email)
+	if err != nil {
+		if input.Body.Purpose == "register" {
+			return nil, huma.Error503ServiceUnavailable("registration is unavailable")
+		}
+		return nil, huma.Error503ServiceUnavailable("password reset is unavailable")
+	}
+	if input.Body.Purpose == "register" && exists {
+		return nil, huma.Error409Conflict("email is already registered")
+	}
+	if input.Body.Purpose == "reset_password" && !exists {
+		return nil, huma.Error400BadRequest("email is not registered")
 	}
 	client := components.GetRedis()
 	if client == nil || components.GetEmailSender() == nil {
