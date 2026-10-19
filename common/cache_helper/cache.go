@@ -48,6 +48,13 @@ func DefaultRLCacheTTL() RLCacheTTL {
 var redisLocalLookups singleflight.Group
 var localLookups singleflight.Group
 
+var sharedLoadContext = context.Background()
+
+// Init sets the shared-load lifetime. Call once during startup, before any lookups.
+func Init(ctx context.Context) {
+	sharedLoadContext = ctx
+}
+
 type cacheLookup[T any] struct {
 	record *T
 	exists bool
@@ -63,6 +70,8 @@ type cacheLookup[T any] struct {
 // Both load and GetRLCached return (record, true, nil) when found,
 // (nil, false, nil) when not found, or (nil, false, err) on failure.
 // forceUpdate bypasses cache reads and singleflight, then refreshes both caches.
+// Shared loads use the application context set by Init; callers use ctx only
+// to stop waiting. Forced refreshes use the caller's context directly.
 // Before loading, existing entries get a 5-second local TTL and a 60-second
 // Redis TTL. Missing entries are allowed; Redis expiry errors abort the refresh.
 func GetRLCached[T any](ctx context.Context, item *CacheItem, cache *redis.Client, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
@@ -84,6 +93,7 @@ func GetRLCachedWithTTL[T any](ctx context.Context, item *CacheItem, cache *redi
 // Both load and GetLCached return (record, true, nil) when found,
 // (nil, false, nil) when not found, or (nil, false, err) on failure.
 // forceUpdate bypasses cache reads and singleflight, then refreshes local cache.
+// Shared loads use the application context set by Init, not the first caller's.
 // Before loading, any existing local entry gets a 5-second TTL.
 func GetLCached[T any](ctx context.Context, item *CacheItem, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
 	return GetLCachedWithTTL(ctx, item, DefaultLCacheTTL(), forceUpdate, load)
@@ -107,7 +117,7 @@ func getCachedWithTTL[T any](ctx context.Context, item *CacheItem, cache *redis.
 		return nil, false, errors.New("cache item is required")
 	}
 	key := item.GetKey()
-	loadAndCache := func() (*T, bool, error) {
+	loadAndCache := func(ctx context.Context) (*T, bool, error) {
 		record, exists, err := load(ctx)
 		if err != nil {
 			return nil, false, err
@@ -136,7 +146,7 @@ func getCachedWithTTL[T any](ctx context.Context, item *CacheItem, cache *redis.
 				return nil, false, err
 			}
 		}
-		return loadAndCache()
+		return loadAndCache(ctx)
 	}
 	getLocal := func() (*T, bool) {
 		cached := LCache.Get(key)
@@ -157,6 +167,7 @@ func getCachedWithTTL[T any](ctx context.Context, item *CacheItem, cache *redis.
 		lookups = &redisLocalLookups
 	}
 	result := lookups.DoChan(key, func() (any, error) {
+		ctx := sharedLoadContext
 		if record, found := getLocal(); found {
 			return cacheLookup[T]{record: record, exists: record != nil}, nil
 		}
@@ -178,7 +189,7 @@ func getCachedWithTTL[T any](ctx context.Context, item *CacheItem, cache *redis.
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		record, exists, err := loadAndCache()
+		record, exists, err := loadAndCache(ctx)
 		return cacheLookup[T]{record: record, exists: exists}, err
 	})
 	select {

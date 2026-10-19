@@ -23,6 +23,7 @@ import (
 )
 
 const emailCodeTTL = 10 * time.Minute
+const emailCodeAttempts = 3
 
 type CaptchaProof struct {
 	CaptchaID string `json:"captcha_id" minLength:"26" maxLength:"26"`
@@ -116,7 +117,7 @@ func RegisterRoutes(api huma.API) {
 		Tags:        []string{"User"},
 		Security:    []map[string][]string{},
 		Middlewares: huma.Middlewares{
-			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 60, Window: time.Minute}),
+			middleware.IPSpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 60, Window: time.Minute}),
 		},
 	}, PublicConfigHandler)
 
@@ -127,8 +128,8 @@ func RegisterRoutes(api huma.API) {
 		Path:        "/user",
 		Tags:        []string{"User"},
 		Middlewares: huma.Middlewares{
-			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 60, Window: time.Minute}),
 			middleware.UserAuthMiddleware(api, []string{users.AccessUser}),
+			middleware.UserSpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 60, Window: time.Minute}),
 		},
 	}, CurrentHandler)
 
@@ -140,7 +141,7 @@ func RegisterRoutes(api huma.API) {
 		Tags:        []string{"User"},
 		Security:    []map[string][]string{},
 		Middlewares: huma.Middlewares{
-			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 60, Window: time.Minute}),
+			middleware.IPSpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 60, Window: time.Minute}),
 		},
 	}, CaptchaHandler)
 
@@ -152,7 +153,7 @@ func RegisterRoutes(api huma.API) {
 		Tags:        []string{"User"},
 		Security:    []map[string][]string{},
 		Middlewares: huma.Middlewares{
-			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 20, Window: time.Minute}),
+			middleware.IPSpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 20, Window: time.Minute}),
 		},
 	}, LoginHandler)
 
@@ -164,7 +165,7 @@ func RegisterRoutes(api huma.API) {
 		Tags:        []string{"User"},
 		Security:    []map[string][]string{},
 		Middlewares: huma.Middlewares{
-			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 10, Window: time.Minute}),
+			middleware.IPSpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 10, Window: time.Minute}),
 		},
 	}, RegisterHandler)
 
@@ -176,7 +177,7 @@ func RegisterRoutes(api huma.API) {
 		Tags:        []string{"User"},
 		Security:    []map[string][]string{},
 		Middlewares: huma.Middlewares{
-			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 10, Window: time.Minute}),
+			middleware.IPSpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 10, Window: time.Minute}),
 		},
 	}, ResetPasswordHandler)
 
@@ -188,7 +189,7 @@ func RegisterRoutes(api huma.API) {
 		Tags:        []string{"User"},
 		Security:    []map[string][]string{},
 		Middlewares: huma.Middlewares{
-			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 5, Window: time.Minute}),
+			middleware.IPSpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 5, Window: time.Minute}),
 		},
 	}, EmailCodeHandler)
 
@@ -445,7 +446,7 @@ func ResetPasswordHandler(ctx context.Context, input *ResetPasswordInput) (*Mess
 }
 
 func emailCodeKey(email, purpose string) string {
-	return fmt.Sprintf("user-email-code:%s:%x", purpose, sha256.Sum256([]byte(email)))
+	return fmt.Sprintf("user-email-code:%s:{%x}", purpose, sha256.Sum256([]byte(email)))
 }
 
 func EmailCodeHandler(ctx context.Context, input *EmailCodeInput) (*MessageOutput, error) {
@@ -491,7 +492,12 @@ func EmailCodeHandler(ctx context.Context, input *EmailCodeInput) (*MessageOutpu
 	code := fmt.Sprintf("%06d", number.Int64())
 	key := emailCodeKey(email, input.Body.Purpose)
 	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(code)))
-	if err := client.Set(ctx, key, digest, emailCodeTTL).Err(); err != nil {
+	_, err = client.Raw().TxPipelined(ctx, func(pipe goredis.Pipeliner) error {
+		pipe.Set(ctx, client.Key(key), digest, emailCodeTTL)
+		pipe.Set(ctx, client.Key(key+":attempts"), emailCodeAttempts, emailCodeTTL)
+		return nil
+	})
+	if err != nil {
 		return nil, huma.Error503ServiceUnavailable("email verification is unavailable")
 	}
 	action := "registration"
@@ -500,9 +506,6 @@ func EmailCodeHandler(ctx context.Context, input *EmailCodeInput) (*MessageOutpu
 	}
 	body := fmt.Sprintf("Your %s verification code is %s. It expires in 10 minutes. If you did not request this code, ignore this email.", action, code)
 	if err := components.GetEmailSender().Send(ctx, email, action+" code", body); err != nil {
-		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 3*time.Second)
-		defer cancel()
-		_ = client.Del(cleanupCtx, key).Err()
 		return nil, huma.Error503ServiceUnavailable("unable to send verification email")
 	}
 	return messageOutput("Verification code sent"), nil
@@ -513,13 +516,30 @@ func verifyEmailCode(ctx context.Context, email, purpose, code string) error {
 	if client == nil {
 		return huma.Error503ServiceUnavailable("email verification is unavailable")
 	}
-	stored, err := client.GetDel(ctx, emailCodeKey(email, purpose)).Result()
+	key := emailCodeKey(email, purpose)
+	var remaining *goredis.IntCmd
+	_, err := client.Raw().TxPipelined(ctx, func(pipe goredis.Pipeliner) error {
+		remaining = pipe.Decr(ctx, client.Key(key+":attempts"))
+		// DECR creates missing counters; give those an expiry without extending existing ones.
+		pipe.ExpireNX(ctx, client.Key(key+":attempts"), emailCodeTTL)
+		return nil
+	})
+	if err != nil {
+		return huma.Error503ServiceUnavailable("email verification is unavailable")
+	}
+	if remaining.Val() < 0 {
+		return huma.Error400BadRequest("invalid or expired email code; request a new code")
+	}
+	stored, err := client.Get(ctx, key).Result()
 	if err != nil && !errors.Is(err, goredis.Nil) {
 		return huma.Error503ServiceUnavailable("email verification is unavailable")
 	}
 	digest := fmt.Sprintf("%x", sha256.Sum256([]byte(code)))
 	if err != nil || len(code) != 6 || subtle.ConstantTimeCompare([]byte(stored), []byte(digest)) != 1 {
 		return huma.Error400BadRequest("invalid or expired email code; request a new code")
+	}
+	if err := client.Del(ctx, key, key+":attempts").Err(); err != nil {
+		return huma.Error503ServiceUnavailable("email verification is unavailable")
 	}
 	return nil
 }

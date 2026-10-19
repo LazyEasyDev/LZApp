@@ -35,8 +35,8 @@ func RegisterRoutes(api huma.API) {
 		Path:        "/am/refstatistics/list",
 		Tags:        []string{"AM referral statistics"},
 		Middlewares: huma.Middlewares{
-			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 60, Window: time.Minute}),
 			middleware.UserAuthAnyAccessMiddleware(api, []string{users.AccessAdmin, users.AccessAM, users.AccessViewAll}),
+			middleware.UserSpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 60, Window: time.Minute}),
 		},
 	}, ListHandler)
 }

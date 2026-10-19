@@ -172,6 +172,10 @@ for `start` and `showlog`.
 
 ## Authentication and referrals
 
+Shared cache-miss loads use the application context, so one disconnected request
+does not cancel other callers' shared work. Each caller can still stop waiting.
+Application shutdown cancels shared loads; no additional load timeout is added.
+
 Forced cache refreshes first set existing local entries to a 5-second TTL and
 existing Redis entries to a 60-second TTL, then load fresh data. Missing entries
 are allowed; Redis expiry errors stop the refresh. Successful loads restore the
@@ -267,8 +271,12 @@ LZApp will see the proxy's source IP. Supporting forwarded client IPs requires
 an explicit trusted-proxy design and appropriate network restrictions, not
 simply accepting arbitrary forwarding headers.
 
-[Rate limits](app/server/base/middleware/speed_limit.go) apply per client IP and
-route (HTTP method plus path). Exceeding a limit returns HTTP 429 with
+[Rate limits](app/server/base/middleware/speed_limit.go) apply per client IP on
+public authentication/configuration endpoints (`IPSpeedLimitMiddleware`) and
+per authenticated user ID on protected endpoints (`UserSpeedLimitMiddleware`,
+after authentication). Both include the route (HTTP method plus path).
+Token rotation or changing IP does not reset a user's protected-route quota.
+Exceeding a limit returns HTTP 429 with
 `Retry-After`. Counters are process-local; multiple instances do not share a
 cluster-wide quota.
 
@@ -310,7 +318,7 @@ Add routes in [app/server/router.go](app/server/router.go) and wire application 
 | Login cookie is not sent | HTTPS, credentials-enabled requests, and same-site frontend/API hosting |
 | All visitors appear to have the same IP | NLB client IP preservation or an unexpected HTTP proxy |
 | Logs are missing from the expected directory | Profile, `BaseDirectory`, `BaseDirectoryRelative`, executable location, and working directory |
-| HTTP 429 | The route's per-IP limit; honor `Retry-After` |
+| HTTP 429 | The route's per-IP or per-user limit; honor `Retry-After` |
 
 ## Development checks
 

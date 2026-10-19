@@ -17,21 +17,28 @@ func DocsTokenViewHandler(account *users.User) DocsTokenView {
 	view := DocsTokenView{
 		AllowedOperations: []string{
 			"GET /health",
+			"GET /user/config",
 			"GET /user/captcha",
 			"POST /user/login",
 			"POST /user/register",
 			"POST /user/email_code",
 			"POST /user/reset_password",
+			"POST /user/logout",
 		},
 	}
 	if account == nil || account.ID == 0 {
 		return view
 	}
 	view.Token = account.APIToken
-	view.AllowedOperations = append(view.AllowedOperations, "GET /user", "GET /auth/check", "POST /user/logout")
 	var access []string
 	if json.Unmarshal([]byte(account.Access), &access) == nil {
+		if slices.Contains(access, users.AccessUser) {
+			view.AllowedOperations = append(view.AllowedOperations, "GET /user", "POST /user/ref")
+		}
 		view.ShowAll = slices.Contains(access, users.AccessAdmin) || slices.Contains(access, users.AccessViewAll)
+		if view.ShowAll || slices.Contains(access, users.AccessAM) {
+			view.AllowedOperations = append(view.AllowedOperations, "GET /am/refstatistics/list")
+		}
 	}
 	return view
 }

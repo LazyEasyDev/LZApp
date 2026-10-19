@@ -25,6 +25,11 @@ user-list endpoint is `/admin/users/list`, not `/base/admin/users/list`.
 
 ## Built-in features
 
+Use `IPSpeedLimitMiddleware` for public operations. On protected operations,
+place `UserSpeedLimitMiddleware` after authentication/authorization so it uses
+the verified user ID rather than the raw token. Both limit per HTTP method and
+route, return HTTP 429 with `Retry-After`, and maintain process-local counters.
+
 Request validation errors include an optional `errors` array with `location` and
 `message` for each failed rule. Rejected values and unstructured underlying errors
 are not included. Additional diagnostics are limited to HTTP 400/422 responses;
@@ -75,6 +80,17 @@ Authorization is enforced by middleware on each protected operation:
 Login, registration, and other explicitly public operations do not require an
 existing session. Check each handler's registration for its exact access and
 rate-limit policy.
+
+Email codes expire after 10 minutes and allow three verification attempts,
+including successful attempts. Wrong guesses do not immediately consume the
+code; successful verification deletes it. The Redis attempt counter is atomic,
+but simultaneous correct submissions can both succeed before deletion.
+Code and counter initialization uses a Redis transaction, with matching hash
+tags for Redis Cluster. The email-code key format changed; codes issued by the
+previous format must be requested again after deployment. The per-email
+30-second sending cooldown uses atomic `SETNX`; SMTP delivery is not transactional.
+If sending fails, the stored code and counter remain until their expiry rather
+than running a separate cleanup operation.
 
 ## Adding your own business APIs
 

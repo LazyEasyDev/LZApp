@@ -75,12 +75,12 @@ type UserOutput struct {
 func RegisterRoutes(api huma.API) {
 	readAccess := []string{accounts.AccessAdmin, accounts.AccessViewAll}
 	readMiddleware := huma.Middlewares{
-		middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 120, Window: time.Minute}),
 		middleware.UserAuthAnyAccessMiddleware(api, readAccess),
+		middleware.UserSpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 120, Window: time.Minute}),
 	}
 	writeMiddleware := huma.Middlewares{
-		middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 30, Window: time.Minute}),
 		middleware.UserAuthMiddleware(api, []string{accounts.AccessAdmin}),
+		middleware.UserSpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 30, Window: time.Minute}),
 	}
 
 	huma.Register(api, huma.Operation{

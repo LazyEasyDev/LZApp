@@ -7,6 +7,7 @@ import (
 	"github.com/LazyEasyDev/EasyRoutine"
 	"github.com/LazyEasyDev/LZApp/app/dbkv"
 	"github.com/LazyEasyDev/LZApp/app/server"
+	"github.com/LazyEasyDev/LZApp/common"
 	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/LazyEasyDev/LZApp/config"
 )
@@ -17,11 +18,14 @@ func Run(ctx context.Context) error {
 		components.WaitAndClose()
 		cancelAll()
 	}()
-
+	// Initialize components and shared resources
 	if err := components.Init(ctx, config.GetConfig()); err != nil {
 		cancelAll()
 		return err
 	}
+	// Initialize common releated code
+	common.Initialize(ctx)
+	// Start the application with initialized components and common code
 	return Start(ctx, cancelAll)
 }
 
