@@ -3,15 +3,15 @@ package app
 import (
 	"log/slog"
 
-	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler"
-	admindbkv "github.com/LazyEasyDev/LZApp/app/base/base_api/handler/admin/dbkv"
-	admineasyroutine "github.com/LazyEasyDev/LZApp/app/base/base_api/handler/admin/easyroutine"
-	admineasystatistics "github.com/LazyEasyDev/LZApp/app/base/base_api/handler/admin/easystatistics"
-	adminusers "github.com/LazyEasyDev/LZApp/app/base/base_api/handler/admin/users"
-	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler/am/refstatistics"
-	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler/docs"
-	"github.com/LazyEasyDev/LZApp/app/base/base_api/handler/user"
-	"github.com/LazyEasyDev/LZApp/app/base/base_api/middleware"
+	"github.com/LazyEasyDev/LZApp/app/server/base/api_handler"
+	admindbkv "github.com/LazyEasyDev/LZApp/app/server/base/api_handler/admin/dbkv"
+	admineasyroutine "github.com/LazyEasyDev/LZApp/app/server/base/api_handler/admin/easyroutine"
+	admineasystatistics "github.com/LazyEasyDev/LZApp/app/server/base/api_handler/admin/easystatistics"
+	adminusers "github.com/LazyEasyDev/LZApp/app/server/base/api_handler/admin/users"
+	"github.com/LazyEasyDev/LZApp/app/server/base/api_handler/am/refstatistics"
+	"github.com/LazyEasyDev/LZApp/app/server/base/api_handler/docs"
+	"github.com/LazyEasyDev/LZApp/app/server/base/api_handler/user"
+	"github.com/LazyEasyDev/LZApp/app/server/base/middleware"
 	huma "github.com/danielgtaylor/huma/v2"
 )
 
@@ -23,7 +23,7 @@ func registerRoutes(api huma.API) {
 	// Health check route never delte this line
 	// for cloud server monitoring
 	slog.Info("Registering health route")
-	handler.RegisterHealthRoutes(api)
+	api_handler.RegisterHealthRoutes(api)
 
 	// Api docs routes
 	slog.Info("Registering docs routes")

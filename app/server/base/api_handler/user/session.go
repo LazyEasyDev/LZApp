@@ -16,9 +16,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/LazyEasyDev/LZApp/app/base/base_api/middleware"
-	"github.com/LazyEasyDev/LZApp/app/base/captcha"
-	"github.com/LazyEasyDev/LZApp/app/base/users"
+	"github.com/LazyEasyDev/LZApp/app/server/base/captcha"
+	"github.com/LazyEasyDev/LZApp/app/server/base/middleware"
+	"github.com/LazyEasyDev/LZApp/app/users"
 	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/LazyEasyDev/LZApp/config"
 	"github.com/danielgtaylor/huma/v2"

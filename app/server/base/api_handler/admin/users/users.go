@@ -12,8 +12,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/LazyEasyDev/LZApp/app/base/base_api/middleware"
-	accounts "github.com/LazyEasyDev/LZApp/app/base/users"
+	"github.com/LazyEasyDev/LZApp/app/server/base/middleware"
+	accounts "github.com/LazyEasyDev/LZApp/app/users"
 	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/go-sql-driver/mysql"

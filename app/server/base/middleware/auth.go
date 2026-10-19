@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/LazyEasyDev/LZApp/app/base/users"
+	"github.com/LazyEasyDev/LZApp/app/users"
 	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/LazyEasyDev/LZApp/components/security"
 	"github.com/LazyEasyDev/LZApp/config"

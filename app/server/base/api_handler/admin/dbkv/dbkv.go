@@ -8,9 +8,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/LazyEasyDev/LZApp/app/base/base_api/middleware"
-	store "github.com/LazyEasyDev/LZApp/app/base/dbkv"
-	"github.com/LazyEasyDev/LZApp/app/base/users"
+	store "github.com/LazyEasyDev/LZApp/app/dbkv"
+	"github.com/LazyEasyDev/LZApp/app/server/base/middleware"
+	"github.com/LazyEasyDev/LZApp/app/users"
 	"github.com/danielgtaylor/huma/v2"
 	"gorm.io/gorm"
 )

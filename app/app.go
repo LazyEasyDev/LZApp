@@ -5,7 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/LazyEasyDev/EasyRoutine"
-	"github.com/LazyEasyDev/LZApp/app/base/dbkv"
+	"github.com/LazyEasyDev/LZApp/app/dbkv"
 	"github.com/LazyEasyDev/LZApp/app/statistics/example"
 	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/LazyEasyDev/LZApp/config"

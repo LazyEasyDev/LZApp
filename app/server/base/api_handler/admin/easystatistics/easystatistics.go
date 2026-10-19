@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/LazyEasyDev/EasyStatistics"
-	"github.com/LazyEasyDev/LZApp/app/base/base_api/middleware"
-	"github.com/LazyEasyDev/LZApp/app/base/users"
+	"github.com/LazyEasyDev/LZApp/app/server/base/middleware"
+	"github.com/LazyEasyDev/LZApp/app/users"
 	"github.com/danielgtaylor/huma/v2"
 )
 
