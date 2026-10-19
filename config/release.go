@@ -1,11 +1,11 @@
 package config
 
-var releaseAppConfig = func() AppConfig {
+var ReleaseAppConfig = func() AppConfig {
 	appConfig := newDefaultConfig()
 	appConfig.Profile = ProfileRelease
 	//
 	appConfig.Log.Level = "info"
-	appConfig.Log.DirectoryRelative = "app"
+	appConfig.Log.BaseDirectoryRelative = "app"
 	appConfig.DB.LogLevel = "silent"
 
 	//

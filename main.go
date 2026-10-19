@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	appcli "github.com/LazyEasyDev/LZApp/cli"
+	_ "github.com/LazyEasyDev/LZApp/local"
 )
 
 func main() {

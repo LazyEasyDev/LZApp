@@ -28,11 +28,13 @@ Configuration is Go code, not a JSON file or an automatically loaded `.env` file
 | [config/profile.go](config/profile.go) | Shared defaults and configuration types |
 | [config/debug.go](config/debug.go) | Debug profile overrides |
 | [config/release.go](config/release.go) | Release profile overrides |
-| `config/local.go` | Optional, Git-ignored local overrides |
+| `local/config.go` | Optional, Git-ignored local configuration overrides |
 
 Local overrides are compiled into the binary too. Check which profile they
-modify: an override of `releaseAppConfig` does not affect `debugAppConfig`.
-Rebuild after changing configuration.
+modify: an override of `config.ReleaseAppConfig` does not affect
+`config.DebugAppConfig`. The executable imports the `local` package to load these
+overrides; [local/package.go](local/package.go) keeps builds working when the
+optional files are absent. Rebuild after changing configuration.
 
 Before using a profile, review:
 
@@ -104,8 +106,6 @@ curl --insecure https://localhost:8443/health
 Do not use `--insecure` for production checks.
 
 Starting the service also initializes DBKV, routine coordination, and statistics.
-The example `mining_score` definition is registered by
-[app.Start](app/app.go); review that example when adapting the application.
 
 ## Everyday commands
 
@@ -152,19 +152,31 @@ After the shutdown grace period expires, remaining HTTP connections are forcibly
 closed. This setting is not a normal request timeout or a login expiry setting.
 Changing API metadata does not change endpoint paths.
 
-Logs are written to the configured `Directory`, with optional terminal output.
-`DirectoryRelative` controls how a relative path is resolved:
+EasyLog creates a `logs/` subdirectory inside the configured `BaseDirectory`,
+with optional terminal output. `BaseDirectoryRelative` controls how a relative
+base path is resolved:
 
 - `"app"`: relative to the executable's directory; the release profile default.
 - `"cwd"`: relative to the current working directory; the debug profile default.
 - Empty: the same as `"cwd"`.
-- An absolute `Directory` is used directly.
+- An absolute `BaseDirectory` is used directly as the base path.
 
-The shared directory is `logs`. For release logging, prefer a built executable
-over `go run`, whose executable is placed in a temporary build directory.
-Use the same profile and path settings for `start` and `showlog`.
+The shared `BaseDirectory` is `.`. This puts logs in `logs/` beside the executable
+for `"app"`, or in the working directory's `logs/` for `"cwd"`. The configuration
+keys are `base_directory` and `base_directory_relative`.
+Previously the default base was `logs`, resulting in `logs/logs/`. Existing log
+files are not moved; to read them, explicitly set `BaseDirectory` to `"logs"`.
+For release logging, prefer a built executable over `go run`, whose executable is
+placed in a temporary build directory. Use the same profile and path settings
+for `start` and `showlog`.
 
 ## Authentication and referrals
+
+Forced cache refreshes first set existing local entries to a 5-second TTL and
+existing Redis entries to a 60-second TTL, then load fresh data. Missing entries
+are allowed; Redis expiry errors stop the refresh. Successful loads restore the
+normal configured TTLs. This limits typical stale-cache duration after a refresh
+failure, but is not a strict cross-instance revocation guarantee.
 
 Protected endpoints accept a bearer API token or the configured login cookie.
 The login cookie is `Secure`, `HttpOnly`, and `SameSite=Strict`; use HTTPS.
@@ -265,24 +277,26 @@ cluster-wide quota.
 ```text
 app/
   app.go                    Application startup and service wiring
-  router.go                 API route registration
-  server.go                 HTTP service startup
   db/                       Database/bootstrap initialization command
   dbkv/                     Database-backed key-value store
   users/                    User model, access rules, referral aggregation
-  server/base/
-    api_handler/            Health, docs, user, admin, and AM handlers
-    captcha/                CAPTCHA and email-code storage
-    middleware/             Authentication, client IPs, cache policy, rate limits
-  statistics/               Application statistics definitions and examples
+  server/
+    router.go               API route registration
+    server.go               HTTP service startup
+    api_handler/            Application-specific business API handlers
+    base/
+      api_handler/          Health, docs, user, admin, and AM handlers
+      captcha/              CAPTCHA and email-code storage
+      middleware/           Authentication, client IPs, cache policy, rate limits
 cli/                        CLI commands and flags
 common/                     Shared application helpers
 components/                 Infrastructure integrations and lifecycle
 config/                     Configuration types, defaults, and profiles
+local/                      Optional local customizations
 main.go                     Process entry point and signal handling
 ```
 
-Add routes in [app/router.go](app/router.go) and wire application services in
+Add routes in [app/server/router.go](app/server/router.go) and wire application services in
 [app/app.go](app/app.go).
 
 ## Troubleshooting
@@ -295,7 +309,7 @@ Add routes in [app/router.go](app/router.go) and wire application services in
 | Browser rejects HTTPS | Certificate hostname, certificate chain, and local trust |
 | Login cookie is not sent | HTTPS, credentials-enabled requests, and same-site frontend/API hosting |
 | All visitors appear to have the same IP | NLB client IP preservation or an unexpected HTTP proxy |
-| Logs are missing from the expected directory | Profile, `DirectoryRelative`, executable location, and working directory |
+| Logs are missing from the expected directory | Profile, `BaseDirectory`, `BaseDirectoryRelative`, executable location, and working directory |
 | HTTP 429 | The route's per-IP limit; honor `Retry-After` |
 
 ## Development checks

@@ -47,11 +47,11 @@ type DeleteOutput struct {
 func RegisterRoutes(api huma.API) {
 	readMiddleware := huma.Middlewares{
 		middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 120, Window: time.Minute}),
-		middleware.UserAuthAnyAccessMiddleware(api, []string{users.ACCESS_ADMIN, users.ACCESS_VIEWALL}),
+		middleware.UserAuthAnyAccessMiddleware(api, []string{users.AccessAdmin, users.AccessViewAll}),
 	}
 	writeMiddleware := huma.Middlewares{
 		middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 30, Window: time.Minute}),
-		middleware.UserAuthMiddleware(api, []string{users.ACCESS_ADMIN}),
+		middleware.UserAuthMiddleware(api, []string{users.AccessAdmin}),
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "get-admin-easyroutine-list",

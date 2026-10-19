@@ -35,7 +35,7 @@ func registerRefRoutes(api huma.API) {
 		Tags:        []string{"User"},
 		Middlewares: huma.Middlewares{
 			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 30, Window: time.Minute}),
-			middleware.UserAuthMiddleware(api, []string{users.ACCESS_USER}),
+			middleware.UserAuthMiddleware(api, []string{users.AccessUser}),
 		},
 	}, GenerateRefHandler)
 

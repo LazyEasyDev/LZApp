@@ -46,12 +46,12 @@ func userAuthMiddleware(api huma.API, requireAllAccessList, requireAnyAccessList
 		}
 		var lookupFailed bool
 		for _, token := range tokens {
-			account, notFound, err := ValidateUserToken(ctx.Context(), token)
+			account, exists, err := ValidateUserToken(ctx.Context(), token)
 			if err != nil {
 				lookupFailed = true
 				continue
 			}
-			if notFound {
+			if !exists {
 				continue
 			}
 			if account != nil && account.ID != 0 {
@@ -81,14 +81,15 @@ func userAuthMiddleware(api huma.API, requireAllAccessList, requireAnyAccessList
 	}
 }
 
+// ValidateUserToken returns the user and whether the token identifies an existing user.
 func ValidateUserToken(ctx context.Context, token string) (*users.User, bool, error) {
 	if _, err := components.GetTokenSigner().VerifyToken(token); err != nil {
 		if errors.Is(err, security.ErrInvalidHMACToken) {
-			return nil, true, nil
+			return nil, false, nil
 		}
 		return nil, false, err
 	}
-	return users.GetByApiToken(ctx, token)
+	return users.GetByAPIToken(ctx, token)
 }
 
 func GetAuthUser(ctx context.Context) (*users.User, bool) {

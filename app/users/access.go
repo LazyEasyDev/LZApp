@@ -2,25 +2,57 @@ package users
 
 import (
 	"encoding/json"
+	"fmt"
 	"slices"
 )
 
 const (
-	ACCESS_USER    = "user"
-	ACCESS_ADMIN   = "admin"
-	ACCESS_VIEWALL = "viewall"
-	ACCESS_AM      = "am"
+	AccessUser    = "user"
+	AccessAdmin   = "admin"
+	AccessViewAll = "viewall"
+	AccessAM      = "am"
 )
 
-var accessList = []string{ACCESS_USER, ACCESS_ADMIN, ACCESS_VIEWALL, ACCESS_AM}
+var accessList = []string{AccessUser, AccessAdmin, AccessViewAll, AccessAM}
 
 func GetAccessList() []string {
 	return slices.Clone(accessList)
 }
 
-func GetAccessListJsonStr() string {
+func GetAccessListJSON() string {
 	encoded, _ := json.Marshal(accessList)
 	return string(encoded)
+}
+
+func EncodeAccess(values []string) (string, error) {
+	normalized := make([]string, 0, len(values))
+	for _, permission := range values {
+		if !slices.Contains(accessList, permission) {
+			return "", fmt.Errorf("unknown access permission %q", permission)
+		}
+		if !slices.Contains(normalized, permission) {
+			normalized = append(normalized, permission)
+		}
+	}
+	encoded, err := json.Marshal(normalized)
+	if err != nil {
+		return "", fmt.Errorf("encode access: %w", err)
+	}
+	return string(encoded), nil
+}
+
+func normalizeAccess(value string) (string, error) {
+	if value == "" {
+		return "[]", nil
+	}
+	var access []string
+	if err := json.Unmarshal([]byte(value), &access); err != nil {
+		return "", fmt.Errorf("access must be a JSON array of strings: %w", err)
+	}
+	if access == nil {
+		return "", fmt.Errorf("access must be a JSON array of strings")
+	}
+	return EncodeAccess(access)
 }
 
 func (user *User) HaveAllAccess(accessList []string) bool {

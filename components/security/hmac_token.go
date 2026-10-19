@@ -38,29 +38,29 @@ func NewHMACTokenSigner(hmacConfig *security_config.SecurityHMACConfig) (*HMACTo
 
 	key := []byte(hmacConfig.HMACKey)
 
-	PayloadBytes := hmacConfig.HMACTokenBytes
-	if PayloadBytes == 0 {
-		PayloadBytes = sha256.Size
+	payloadBytes := hmacConfig.HMACTokenBytes
+	if payloadBytes == 0 {
+		payloadBytes = sha256.Size
 	}
-	SignatureBytes := hmacConfig.HMACTokenBytes
-	if SignatureBytes == 0 {
-		SignatureBytes = sha256.Size
+	signatureBytes := hmacConfig.HMACTokenBytes
+	if signatureBytes == 0 {
+		signatureBytes = sha256.Size
 	}
 
 	for _, size := range []struct {
 		name  string
 		bytes int
 	}{
-		{name: "payload", bytes: PayloadBytes},
-		{name: "signature", bytes: SignatureBytes},
+		{name: "payload", bytes: payloadBytes},
+		{name: "signature", bytes: signatureBytes},
 	} {
 		if size.bytes < 16 || size.bytes > sha256.Size {
 			return nil, fmt.Errorf("HMAC token %s size must be between 16 and %d bytes", size.name, sha256.Size)
 		}
 	}
 	signer := &HMACTokenSigner{
-		payloadBytes:   PayloadBytes,
-		signatureBytes: SignatureBytes,
+		payloadBytes:   payloadBytes,
+		signatureBytes: signatureBytes,
 	}
 	key = bytes.TrimSpace(key)
 	if len(key) == 0 {

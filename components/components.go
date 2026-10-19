@@ -157,7 +157,7 @@ func InitSecurity(hmacConfig *security_config.SecurityHMACConfig, bcryptConfig *
 	return nil
 }
 
-func InitHttpServer(httpConfig *http_config.HTTPConfig) error {
+func InitHTTPServer(httpConfig *http_config.HTTPConfig) error {
 	slog.Info("initialize httpserver...")
 	srv, err := httpserver.New(httpConfig)
 	if err != nil {
@@ -168,7 +168,7 @@ func InitHttpServer(httpConfig *http_config.HTTPConfig) error {
 	return nil
 }
 
-func CloseHttpServer() error {
+func CloseHTTPServer() error {
 	slog.Info("closing HTTP server...")
 	if runtime.HTTP != nil {
 		err := runtime.HTTP.Close()
@@ -246,7 +246,7 @@ func Init(ctx context.Context, appConfig *config.AppConfig) error {
 		slog.Error("invalid HTTP cookie max age:" + err.Error())
 		return fmt.Errorf("validate HTTP cookie max age: %w", err)
 	}
-	if err := InitHttpServer(appConfig.HTTP); err != nil {
+	if err := InitHTTPServer(appConfig.HTTP); err != nil {
 		slog.Error("failed to initialize HTTP server:" + err.Error())
 		return fmt.Errorf("initialize HTTP server: %w", err)
 	}
@@ -266,7 +266,7 @@ func closeComponents() {
 	fmt.Fprintln(os.Stderr) //ctr+c signal for newline
 	slog.Info("----------closing components..................----------------")
 	// Close the HTTP server if it was initialized
-	if err := CloseHttpServer(); err != nil {
+	if err := CloseHTTPServer(); err != nil {
 		slog.Error("failed to close HTTP server:" + err.Error())
 	}
 

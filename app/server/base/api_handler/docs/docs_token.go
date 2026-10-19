@@ -24,18 +24,18 @@ func DocsTokenHandler(writer http.ResponseWriter, request *http.Request) {
 		http.Error(writer, "Token unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	api_token := ""
+	apiToken := ""
 	cookies := request.CookiesNamed(httpConfig.APITokenCookieName)
 	if len(cookies) == 1 && cookies[0].Value != "" && len(cookies[0].Value) <= 128 {
-		api_token = cookies[0].Value
+		apiToken = cookies[0].Value
 	}
 
-	account, _, err := middleware.ValidateUserToken(request.Context(), api_token)
+	account, _, err := middleware.ValidateUserToken(request.Context(), apiToken)
 	if err != nil {
 		http.Error(writer, "Token unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	if account != nil && !account.HaveAllAccess([]string{users.ACCESS_USER}) {
+	if account != nil && !account.HaveAllAccess([]string{users.AccessUser}) {
 		http.Error(writer, "User access required", http.StatusForbidden)
 		return
 	}

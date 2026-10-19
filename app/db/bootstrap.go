@@ -17,18 +17,18 @@ func Run(ctx context.Context) (runErr error) {
 	if appConfig == nil {
 		return fmt.Errorf("application configuration is required")
 	}
+	if err := components.InitSecurity(appConfig.SecurityHMAC, appConfig.SecurityBcrypt); err != nil {
+		return fmt.Errorf("initialize security: %w", err)
+	}
 	// Ensure the database exists before initializing it.
 	if err := gormdb.EnsureDatabase(ctx, appConfig.DB); err != nil {
 		return err
 	}
 	// Initialize the database component
-	init_err := components.InitDB(ctx, appConfig.DB)
-	if init_err != nil {
-		return init_err
+	initErr := components.InitDB(ctx, appConfig.DB)
+	if initErr != nil {
+		return initErr
 	}
-	//
-	components.InitSecurity(appConfig.SecurityHMAC, appConfig.SecurityBcrypt)
-
 	defer func() {
 		if err := components.CloseDB(); err != nil {
 			runErr = errors.Join(runErr, err)

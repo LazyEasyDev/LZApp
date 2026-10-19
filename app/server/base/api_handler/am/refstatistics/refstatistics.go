@@ -36,7 +36,7 @@ func RegisterRoutes(api huma.API) {
 		Tags:        []string{"AM referral statistics"},
 		Middlewares: huma.Middlewares{
 			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 60, Window: time.Minute}),
-			middleware.UserAuthAnyAccessMiddleware(api, []string{users.ACCESS_ADMIN, users.ACCESS_AM, users.ACCESS_VIEWALL}),
+			middleware.UserAuthAnyAccessMiddleware(api, []string{users.AccessAdmin, users.AccessAM, users.AccessViewAll}),
 		},
 	}, ListHandler)
 }
@@ -46,8 +46,8 @@ func ListHandler(ctx context.Context, input *ListInput) (*ListOutput, error) {
 	if !authenticated {
 		return nil, huma.Error401Unauthorized("login required")
 	}
-	privileged := middleware.HaveAnyAccess(ctx, []string{users.ACCESS_ADMIN, users.ACCESS_VIEWALL})
-	if !privileged && !middleware.HaveAnyAccess(ctx, []string{users.ACCESS_AM}) {
+	privileged := middleware.HaveAnyAccess(ctx, []string{users.AccessAdmin, users.AccessViewAll})
+	if !privileged && !middleware.HaveAnyAccess(ctx, []string{users.AccessAM}) {
 		return nil, huma.Error403Forbidden("insufficient access")
 	}
 	refUserID := input.RefUserID

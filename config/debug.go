@@ -1,11 +1,11 @@
 package config
 
-var debugAppConfig = func() AppConfig {
+var DebugAppConfig = func() AppConfig {
 	appConfig := newDefaultConfig()
 	appConfig.Profile = ProfileDebug
 	//
 	appConfig.Log.Level = "debug"
-	appConfig.Log.DirectoryRelative = "cwd"
+	appConfig.Log.BaseDirectoryRelative = "cwd"
 	appConfig.DB.LogLevel = "warn"
 	//
 	return appConfig

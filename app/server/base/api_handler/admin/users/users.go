@@ -6,11 +6,8 @@ import (
 	"errors"
 	"math"
 	"net/http"
-	"net/mail"
-	"slices"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/LazyEasyDev/LZApp/app/server/base/middleware"
 	accounts "github.com/LazyEasyDev/LZApp/app/users"
@@ -78,14 +75,14 @@ type UserOutput struct {
 }
 
 func RegisterRoutes(api huma.API) {
-	readAccess := []string{accounts.ACCESS_ADMIN, accounts.ACCESS_VIEWALL}
+	readAccess := []string{accounts.AccessAdmin, accounts.AccessViewAll}
 	readMiddleware := huma.Middlewares{
 		middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 120, Window: time.Minute}),
 		middleware.UserAuthAnyAccessMiddleware(api, readAccess),
 	}
 	writeMiddleware := huma.Middlewares{
 		middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 30, Window: time.Minute}),
-		middleware.UserAuthMiddleware(api, []string{accounts.ACCESS_ADMIN}),
+		middleware.UserAuthMiddleware(api, []string{accounts.AccessAdmin}),
 	}
 
 	huma.Register(api, huma.Operation{
@@ -184,7 +181,7 @@ func CreateHandler(ctx context.Context, input *CreateInput) (*UserOutput, error)
 		Name:     normalizeName(input.Body.Name),
 		Email:    email,
 		Password: password,
-		ApiToken: token,
+		APIToken: token,
 		Access:   access,
 	}
 	if err := accounts.Create(ctx, account); err != nil {
@@ -194,11 +191,11 @@ func CreateHandler(ctx context.Context, input *CreateInput) (*UserOutput, error)
 }
 
 func UpdateHandler(ctx context.Context, input *UpdateInput) (*UserOutput, error) {
-	account, notFound, err := accounts.GetByID(ctx, input.Body.ID)
+	account, exists, err := accounts.GetByID(ctx, input.Body.ID)
 	if err != nil {
 		return nil, huma.Error503ServiceUnavailable("user update is unavailable")
 	}
-	if notFound {
+	if !exists {
 		return nil, huma.Error404NotFound("user not found")
 	}
 	email, err := normalizeEmail(input.Body.Email)
@@ -267,10 +264,9 @@ func normalizeName(name *string) *string {
 }
 
 func normalizeEmail(email string) (string, error) {
-	email = strings.ToLower(strings.TrimSpace(email))
-	address, err := mail.ParseAddress(email)
-	if err != nil || address.Address != email || len(email) > 254 {
-		return "", huma.Error400BadRequest("invalid email address")
+	email, err := accounts.NormalizeEmail(email)
+	if err != nil {
+		return "", huma.Error400BadRequest(err.Error())
 	}
 	return email, nil
 }
@@ -279,28 +275,18 @@ func validatePassword(password string, required bool) error {
 	if password == "" && !required {
 		return nil
 	}
-	if utf8.RuneCountInString(password) < 8 || len(password) > 72 {
-		return huma.Error400BadRequest("password must contain at least 8 characters and at most 72 bytes")
+	if err := accounts.ValidateNewPassword(password); err != nil {
+		return huma.Error400BadRequest(err.Error())
 	}
 	return nil
 }
 
 func encodeAccess(values []string) (string, error) {
-	allowed := accounts.GetAccessList()
-	normalized := make([]string, 0, len(values))
-	for _, value := range values {
-		if !slices.Contains(allowed, value) {
-			return "", huma.Error400BadRequest("invalid access permission")
-		}
-		if !slices.Contains(normalized, value) {
-			normalized = append(normalized, value)
-		}
-	}
-	encoded, err := json.Marshal(normalized)
+	encoded, err := accounts.EncodeAccess(values)
 	if err != nil {
-		return "", huma.Error400BadRequest("invalid access")
+		return "", huma.Error400BadRequest("invalid access permission")
 	}
-	return string(encoded), nil
+	return encoded, nil
 }
 
 func writeError(err error) error {

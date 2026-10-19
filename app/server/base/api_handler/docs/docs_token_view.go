@@ -27,11 +27,11 @@ func DocsTokenViewHandler(account *users.User) DocsTokenView {
 	if account == nil || account.ID == 0 {
 		return view
 	}
-	view.Token = account.ApiToken
+	view.Token = account.APIToken
 	view.AllowedOperations = append(view.AllowedOperations, "GET /user", "GET /auth/check", "POST /user/logout")
 	var access []string
 	if json.Unmarshal([]byte(account.Access), &access) == nil {
-		view.ShowAll = slices.Contains(access, users.ACCESS_ADMIN) || slices.Contains(access, users.ACCESS_VIEWALL)
+		view.ShowAll = slices.Contains(access, users.AccessAdmin) || slices.Contains(access, users.AccessViewAll)
 	}
 	return view
 }

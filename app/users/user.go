@@ -2,10 +2,8 @@ package users
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -21,7 +19,7 @@ type User struct {
 	Name       *string    `gorm:"size:100" json:"name"`
 	Email      string     `gorm:"size:254;not null;uniqueIndex" json:"email"`
 	Password   string     `gorm:"size:128;not null" json:"password"`
-	ApiToken   string     `gorm:"size:128;not null;uniqueIndex" json:"api_token"`
+	APIToken   string     `gorm:"size:128;not null;uniqueIndex" json:"api_token"`
 	Access     string     `gorm:"type:text" json:"access"`
 	RefUserID  *uint64    `gorm:"column:ref_userid;index" json:"ref_userid"`
 	RefChannel *string    `gorm:"size:32" json:"ref_channel"`
@@ -42,9 +40,9 @@ func CreateTable(ctx context.Context) error {
 func InitData(ctx context.Context) error {
 	database := components.GetDB()
 	name := "admin"
-	password_plain := "admin"
+	plainPassword := "admin"
 	email := "admin@lzapp.local"
-	pass, err := components.GetPasswordHasher().HashPassword(password_plain)
+	pass, err := components.GetPasswordHasher().HashPassword(plainPassword)
 	if err != nil {
 		return err
 	}
@@ -57,9 +55,9 @@ func InitData(ctx context.Context) error {
 	initial := User{
 		Name:     &name,
 		Email:    email,
-		Access:   GetAccessListJsonStr(),
+		Access:   GetAccessListJSON(),
 		Password: pass,
-		ApiToken: apiToken, // Replace with a proper initial API token if needed
+		APIToken: apiToken, // Replace with a proper initial API token if needed
 	}
 	return database.WithContext(ctx).
 		Where(User{Email: initial.Email}).
@@ -67,34 +65,7 @@ func InitData(ctx context.Context) error {
 		FirstOrCreate(&initial).Error
 }
 
-func normalizeAccess(value string) (string, error) {
-	if value == "" {
-		return "[]", nil
-	}
-	var access []string
-	if err := json.Unmarshal([]byte(value), &access); err != nil {
-		return "", fmt.Errorf("access must be a JSON array of strings: %w", err)
-	}
-	if access == nil {
-		return "", fmt.Errorf("access must be a JSON array of strings")
-	}
-	var allowed []string = GetAccessList()
-	normalized := make([]string, 0, len(allowed))
-	for _, permission := range access {
-		if !slices.Contains(allowed, permission) {
-			return "", fmt.Errorf("unknown access permission %q", permission)
-		}
-		if !slices.Contains(normalized, permission) {
-			normalized = append(normalized, permission)
-		}
-	}
-	encoded, err := json.Marshal(normalized)
-	if err != nil {
-		return "", fmt.Errorf("encode access: %w", err)
-	}
-	return string(encoded), nil
-}
-
+// GetByID returns the user and whether it exists.
 func GetByID(ctx context.Context, id uint64) (*User, bool, error) {
 	return getByID(ctx, id, components.GetDB(), components.GetRedis(), false)
 }
@@ -104,15 +75,16 @@ func getByID(ctx context.Context, id uint64, database *gorm.DB, cache *redis.Cli
 		var user User
 		err := database.WithContext(ctx).First(&user, id).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, true, nil
+			return nil, false, nil
 		}
 		if err != nil {
 			return nil, false, err
 		}
-		return &user, false, nil
+		return &user, true, nil
 	})
 }
 
+// GetByEmail returns the user and whether it exists.
 func GetByEmail(ctx context.Context, email string) (*User, bool, error) {
 	return getByEmail(ctx, email, components.GetDB(), components.GetRedis(), false)
 }
@@ -122,30 +94,31 @@ func getByEmail(ctx context.Context, email string, database *gorm.DB, cache *red
 		var user User
 		err := database.WithContext(ctx).Where("email = ?", email).First(&user).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, true, nil
+			return nil, false, nil
 		}
 		if err != nil {
 			return nil, false, err
 		}
-		return &user, false, nil
+		return &user, true, nil
 	})
 }
 
-func GetByApiToken(ctx context.Context, api_token string) (*User, bool, error) {
-	return getByApiToken(ctx, api_token, components.GetDB(), components.GetRedis(), false)
+// GetByAPIToken returns the user and whether it exists.
+func GetByAPIToken(ctx context.Context, apiToken string) (*User, bool, error) {
+	return getByAPIToken(ctx, apiToken, components.GetDB(), components.GetRedis(), false)
 }
 
-func getByApiToken(ctx context.Context, apiToken string, database *gorm.DB, cache *redis.Client, forceUpdate bool) (*User, bool, error) {
+func getByAPIToken(ctx context.Context, apiToken string, database *gorm.DB, cache *redis.Client, forceUpdate bool) (*User, bool, error) {
 	return cache_helper.GetRLCached(ctx, cache_helper.NewItem("user").Attr("api_token", apiToken), cache, forceUpdate, func(ctx context.Context) (*User, bool, error) {
 		var user User
 		err := database.WithContext(ctx).Where("api_token = ?", apiToken).First(&user).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, true, nil
+			return nil, false, nil
 		}
 		if err != nil {
 			return nil, false, err
 		}
-		return &user, false, nil
+		return &user, true, nil
 	})
 }
 
@@ -153,7 +126,7 @@ type ListFilter struct {
 	ID         uint64
 	Name       string
 	Email      string
-	ApiToken   string
+	APIToken   string
 	Access     string
 	RefUserID  uint64
 	RefChannel string
@@ -171,8 +144,8 @@ func applyListFilter(query *gorm.DB, filter ListFilter) *gorm.DB {
 	if filter.Email != "" {
 		query = query.Where("email LIKE ? ESCAPE '!'", "%"+escape.Replace(filter.Email)+"%")
 	}
-	if filter.ApiToken != "" {
-		query = query.Where("api_token = ?", filter.ApiToken)
+	if filter.APIToken != "" {
+		query = query.Where("api_token = ?", filter.APIToken)
 	}
 	if filter.Access != "" {
 		query = query.Where("access LIKE ?", "%\""+escape.Replace(filter.Access)+"\"%")
@@ -229,9 +202,9 @@ func refreshUserCache(ctx context.Context, database *gorm.DB, cache *redis.Clien
 			emails[user.Email] = true
 			_, _, _ = getByEmail(ctx, user.Email, database, cache, true)
 		}
-		if !tokens[user.ApiToken] {
-			tokens[user.ApiToken] = true
-			_, _, _ = getByApiToken(ctx, user.ApiToken, database, cache, true)
+		if !tokens[user.APIToken] {
+			tokens[user.APIToken] = true
+			_, _, _ = getByAPIToken(ctx, user.APIToken, database, cache, true)
 		}
 	}
 }
@@ -302,7 +275,7 @@ func update(ctx context.Context, user *User, database *gorm.DB, cache *redis.Cli
 			"email":     user.Email,
 			"access":    user.Access,
 			"password":  user.Password,
-			"api_token": user.ApiToken,
+			"api_token": user.APIToken,
 		}
 		return transaction.Model(&User{}).
 			Where("id = ?", user.ID).

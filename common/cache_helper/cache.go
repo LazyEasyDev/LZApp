@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"time"
 
 	"github.com/LazyEasyDev/LCache"
@@ -48,8 +49,8 @@ var redisLocalLookups singleflight.Group
 var localLookups singleflight.Group
 
 type cacheLookup[T any] struct {
-	record   *T
-	notFound bool
+	record *T
+	exists bool
 }
 
 // GetRLCached uses Redis (R) and local cache (L) with DefaultRLCacheTTL.
@@ -59,9 +60,11 @@ type cacheLookup[T any] struct {
 // Lookups check local cache, then Redis, then load. Redis values are JSON-encoded
 // on writes and JSON-decoded on reads, so T must support both operations.
 // Missing records are cached as JSON null in Redis.
-// Both load and GetRLCached return (record, false, nil) when found,
-// (nil, true, nil) when not found, or (nil, false, err) on failure.
+// Both load and GetRLCached return (record, true, nil) when found,
+// (nil, false, nil) when not found, or (nil, false, err) on failure.
 // forceUpdate bypasses cache reads and singleflight, then refreshes both caches.
+// Before loading, existing entries get a 5-second local TTL and a 60-second
+// Redis TTL. Missing entries are allowed; Redis expiry errors abort the refresh.
 func GetRLCached[T any](ctx context.Context, item *CacheItem, cache *redis.Client, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
 	return GetRLCachedWithTTL(ctx, item, cache, DefaultRLCacheTTL(), forceUpdate, load)
 }
@@ -78,9 +81,10 @@ func GetRLCachedWithTTL[T any](ctx context.Context, item *CacheItem, cache *redi
 // item must be non-nil and supplies the cache key and statistics tag.
 // Cache writes update item.Val. Use a fresh item per call and do not mutate it
 // after passing it in; canceled calls may continue using it in the background.
-// Both load and GetLCached return (record, false, nil) when found,
-// (nil, true, nil) when not found, or (nil, false, err) on failure.
+// Both load and GetLCached return (record, true, nil) when found,
+// (nil, false, nil) when not found, or (nil, false, err) on failure.
 // forceUpdate bypasses cache reads and singleflight, then refreshes local cache.
+// Before loading, any existing local entry gets a 5-second TTL.
 func GetLCached[T any](ctx context.Context, item *CacheItem, forceUpdate bool, load func(context.Context) (*T, bool, error)) (*T, bool, error) {
 	return GetLCachedWithTTL(ctx, item, DefaultLCacheTTL(), forceUpdate, load)
 }
@@ -104,26 +108,34 @@ func getCachedWithTTL[T any](ctx context.Context, item *CacheItem, cache *redis.
 	}
 	key := item.GetKey()
 	loadAndCache := func() (*T, bool, error) {
-		record, notFound, err := load(ctx)
+		record, exists, err := load(ctx)
 		if err != nil {
 			return nil, false, err
 		}
-		if notFound {
+		if !exists {
 			item.Val((*T)(nil)).Set(ttl.NotFoundLocalSeconds)
 			if cache != nil {
 				cache.Set(ctx, key, "null", time.Duration(ttl.NotFoundRedisSeconds)*time.Second)
 			}
-			return nil, true, nil
+			return nil, false, nil
 		}
 		item.Val(record).Set(ttl.LocalSeconds)
 		if cache != nil {
-			if encoded, err := json.Marshal(record); err == nil {
+			if encoded, err := json.Marshal(record); err != nil {
+				slog.Error("failed to marshal cache record", "error", err)
+			} else {
 				cache.Set(ctx, key, encoded, time.Duration(ttl.RedisSeconds)*time.Second)
 			}
 		}
-		return record, false, nil
+		return record, true, nil
 	}
 	if forceUpdate {
+		LCache.Touch(key, 5)
+		if cache != nil {
+			if err := cache.Expire(ctx, key, 60*time.Second).Err(); err != nil {
+				return nil, false, err
+			}
+		}
 		return loadAndCache()
 	}
 	getLocal := func() (*T, bool) {
@@ -135,7 +147,7 @@ func getCachedWithTTL[T any](ctx context.Context, item *CacheItem, cache *redis.
 		return record, ok
 	}
 	if record, found := getLocal(); found {
-		return record, record == nil, nil
+		return record, record != nil, nil
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
@@ -146,26 +158,28 @@ func getCachedWithTTL[T any](ctx context.Context, item *CacheItem, cache *redis.
 	}
 	result := lookups.DoChan(key, func() (any, error) {
 		if record, found := getLocal(); found {
-			return cacheLookup[T]{record: record, notFound: record == nil}, nil
+			return cacheLookup[T]{record: record, exists: record != nil}, nil
 		}
 		if cache != nil {
 			if encoded, err := cache.Get(ctx, key).Result(); err == nil {
 				var record *T
-				if err := json.Unmarshal([]byte(encoded), &record); err == nil {
+				if err := json.Unmarshal([]byte(encoded), &record); err != nil {
+					slog.Error("failed to unmarshal cache record", "error", err)
+				} else {
 					if record == nil {
 						item.Val((*T)(nil)).Set(ttl.NotFoundLocalSeconds)
-						return cacheLookup[T]{notFound: true}, nil
+						return cacheLookup[T]{}, nil
 					}
 					item.Val(record).Set(ttl.LocalSeconds)
-					return cacheLookup[T]{record: record}, nil
+					return cacheLookup[T]{record: record, exists: true}, nil
 				}
 			}
 		}
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		record, notFound, err := loadAndCache()
-		return cacheLookup[T]{record: record, notFound: notFound}, err
+		record, exists, err := loadAndCache()
+		return cacheLookup[T]{record: record, exists: exists}, err
 	})
 	select {
 	case <-ctx.Done():
@@ -178,6 +192,6 @@ func getCachedWithTTL[T any](ctx context.Context, item *CacheItem, cache *redis.
 			return nil, false, lookup.Err
 		}
 		cached := lookup.Val.(cacheLookup[T])
-		return cached.record, cached.notFound, nil
+		return cached.record, cached.exists, nil
 	}
 }

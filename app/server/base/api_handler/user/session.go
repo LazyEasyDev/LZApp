@@ -11,10 +11,7 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
-	"net/mail"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/LazyEasyDev/LZApp/app/server/base/captcha"
 	"github.com/LazyEasyDev/LZApp/app/server/base/middleware"
@@ -131,7 +128,7 @@ func RegisterRoutes(api huma.API) {
 		Tags:        []string{"User"},
 		Middlewares: huma.Middlewares{
 			middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 60, Window: time.Minute}),
-			middleware.UserAuthMiddleware(api, []string{users.ACCESS_USER}),
+			middleware.UserAuthMiddleware(api, []string{users.AccessUser}),
 		},
 	}, CurrentHandler)
 
@@ -240,10 +237,10 @@ func publicUser(account *users.User) users.User {
 }
 
 func signedInOutput(account *users.User) (*UserOutput, error) {
-	if !account.HaveAllAccess([]string{users.ACCESS_USER}) {
+	if !account.HaveAllAccess([]string{users.AccessUser}) {
 		return nil, huma.Error403Forbidden("user access required")
 	}
-	cookie, err := tokenCookie(account.ApiToken)
+	cookie, err := tokenCookie(account.APIToken)
 	if err != nil {
 		return nil, err
 	}
@@ -301,10 +298,9 @@ func PublicConfigHandler(_ context.Context, _ *struct{}) (*PublicConfigOutput, e
 }
 
 func normalizeEmail(email string) (string, error) {
-	email = strings.ToLower(strings.TrimSpace(email))
-	address, err := mail.ParseAddress(email)
-	if err != nil || address.Address != email || len(email) > 254 {
-		return "", huma.Error400BadRequest("invalid email address")
+	email, err := users.NormalizeEmail(email)
+	if err != nil {
+		return "", huma.Error400BadRequest(err.Error())
 	}
 	return email, nil
 }
@@ -317,8 +313,8 @@ func verifyCaptcha(proof CaptchaProof) error {
 }
 
 func validateNewPassword(password string) error {
-	if utf8.RuneCountInString(password) < 8 || len(password) > 72 {
-		return huma.Error400BadRequest("password must contain at least 8 characters and at most 72 bytes")
+	if err := users.ValidateNewPassword(password); err != nil {
+		return huma.Error400BadRequest(err.Error())
 	}
 	return nil
 }
@@ -331,11 +327,11 @@ func LoginHandler(ctx context.Context, input *LoginInput) (*UserOutput, error) {
 	if err != nil {
 		return nil, err
 	}
-	account, notFound, err := users.GetByEmail(ctx, email)
+	account, exists, err := users.GetByEmail(ctx, email)
 	if err != nil {
 		return nil, huma.Error503ServiceUnavailable("login is unavailable")
 	}
-	if notFound {
+	if !exists {
 		return nil, huma.Error401Unauthorized("invalid email or password")
 	}
 	valid, err := components.GetPasswordHasher().VerifyPassword(input.Body.Password, account.Password)
@@ -387,9 +383,9 @@ func RegisterHandler(ctx context.Context, input *RegisterInput) (output *UserOut
 	if err != nil {
 		return nil, huma.Error500InternalServerError("unable to generate token")
 	}
-	access, _ := json.Marshal([]string{users.ACCESS_USER})
+	access, _ := json.Marshal([]string{users.AccessUser})
 	account := &users.User{
-		Name: input.Body.Name, Email: email, Password: password, ApiToken: token, Access: string(access),
+		Name: input.Body.Name, Email: email, Password: password, APIToken: token, Access: string(access),
 		RegIP: middleware.GetClientIP(ctx),
 	}
 	if refUserID != 0 {
@@ -416,11 +412,11 @@ func ResetPasswordHandler(ctx context.Context, input *ResetPasswordInput) (*Mess
 	if err := verifyEmailCode(ctx, email, "reset_password", input.Body.EmailCode); err != nil {
 		return nil, err
 	}
-	account, notFound, err := users.GetByEmail(ctx, email)
+	account, exists, err := users.GetByEmail(ctx, email)
 	if err != nil {
 		return nil, huma.Error503ServiceUnavailable("password reset is unavailable")
 	}
-	if notFound {
+	if !exists {
 		return nil, huma.Error400BadRequest("unable to reset password")
 	}
 	password, err := components.GetPasswordHasher().HashPassword(input.Body.NewPassword)
@@ -433,7 +429,7 @@ func ResetPasswordHandler(ctx context.Context, input *ResetPasswordInput) (*Mess
 	}
 	updated := *account
 	updated.Password = password
-	updated.ApiToken = token
+	updated.APIToken = token
 	if err := users.Update(ctx, &updated); err != nil {
 		return nil, huma.Error503ServiceUnavailable(err.Error())
 	}

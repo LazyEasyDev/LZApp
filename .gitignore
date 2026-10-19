@@ -1,4 +1,6 @@
 /logs/
 LZApp
 .DS_Store
-/config/local.go
+/local/config.go
+/local/statisticsExample.go
+/local/

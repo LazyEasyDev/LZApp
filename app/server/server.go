@@ -1,4 +1,4 @@
-package app
+package server
 
 import (
 	"context"
@@ -8,15 +8,15 @@ import (
 	"github.com/LazyEasyDev/LZApp/components"
 )
 
-func startHTTPServer(ctx context.Context) error {
-	http_server := components.GetHTTP()
-	if http_server == nil {
+func Start(ctx context.Context) error {
+	httpServer := components.GetHTTP()
+	if httpServer == nil {
 		return fmt.Errorf("HTTP server is disabled or not initialized")
 	}
 	// register the HTTP routes
 	slog.Info("Registering HTTP routes......")
-	registerRoutes(http_server.API())
+	registerRoutes(httpServer.API())
 	// start the HTTP service
 	slog.Info("Starting HTTP service")
-	return http_server.Start(ctx)
+	return httpServer.Start(ctx)
 }

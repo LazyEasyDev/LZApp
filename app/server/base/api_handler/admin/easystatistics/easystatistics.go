@@ -53,7 +53,7 @@ type QueryOutput struct {
 func RegisterRoutes(api huma.API) {
 	readMiddleware := huma.Middlewares{
 		middleware.SpeedLimitMiddleware(api, middleware.SpeedLimitPolicy{Requests: 120, Window: time.Minute}),
-		middleware.UserAuthAnyAccessMiddleware(api, []string{users.ACCESS_ADMIN, users.ACCESS_VIEWALL}),
+		middleware.UserAuthAnyAccessMiddleware(api, []string{users.AccessAdmin, users.AccessViewAll}),
 	}
 	huma.Register(api, huma.Operation{
 		OperationID: "get-admin-easystatistics-list",

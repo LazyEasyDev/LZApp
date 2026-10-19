@@ -11,6 +11,8 @@ For setup, configuration, and deployment, see the
 
 ```text
 server/
+  router.go            API route registration
+  server.go            HTTP service startup
   base/
     api_handler/       Built-in health, documentation, account, and admin APIs
     captcha/           CAPTCHA and email-code storage
@@ -72,7 +74,7 @@ rate-limit policy.
 4. Explicitly attach the required authentication/authorization and rate-limit
    middleware. An OpenAPI security declaration alone does not protect a handler.
 5. Import the package and call its `RegisterRoutes` function in
-   [app/router.go](../router.go). Adding a folder does not register routes
+   [router.go](router.go). Adding a folder does not register routes
    automatically.
 
 Use [base middleware](base/middleware/) rather than duplicating token validation
@@ -88,8 +90,8 @@ and verify both permitted and denied requests.
 
 ## Where the server is wired
 
-- [app/router.go](../router.go) registers built-in and business routes.
-- [app/server.go](../server.go) registers routes and starts the HTTP service.
+- [router.go](router.go) registers built-in and business routes.
+- [server.go](server.go) registers routes and starts the HTTP service.
 - [components/httpserver](../../components/httpserver/) owns HTTPS configuration,
   OpenAPI setup, and graceful HTTP shutdown.
 - [app/app.go](../app.go) initializes application services and starts the HTTP

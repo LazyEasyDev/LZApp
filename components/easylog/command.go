@@ -12,9 +12,9 @@ func ShowLogs(writer io.Writer, level string, tail int) error {
 		tail = int(logConfig.ShowLogTail)
 	}
 	return Show(writer, ReadOptions{
-		Directory:         logConfig.Directory,
-		DirectoryRelative: logConfig.DirectoryRelative,
-		Level:             level,
-		Tail:              tail,
+		BaseDirectory:         logConfig.BaseDirectory,
+		BaseDirectoryRelative: logConfig.BaseDirectoryRelative,
+		Level:                 level,
+		Tail:                  tail,
 	})
 }

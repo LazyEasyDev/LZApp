@@ -6,7 +6,7 @@ import (
 
 	"github.com/LazyEasyDev/EasyRoutine"
 	"github.com/LazyEasyDev/LZApp/app/dbkv"
-	"github.com/LazyEasyDev/LZApp/app/statistics/example"
+	"github.com/LazyEasyDev/LZApp/app/server"
 	"github.com/LazyEasyDev/LZApp/components"
 	"github.com/LazyEasyDev/LZApp/config"
 )
@@ -37,7 +37,7 @@ func Start(ctx context.Context, cancelAll context.CancelFunc) error {
 	/////////////////start HTTP service if enabled////////////////////////////////
 	_, err := EasyRoutine.SafeGoWithCtx(
 		ctx, func(taskCtx context.Context) {
-			if err := startHTTPServer(taskCtx); err != nil {
+			if err := server.Start(taskCtx); err != nil {
 				slog.Error("http service failed", "error", err)
 				cancelAll()
 			}
@@ -51,9 +51,6 @@ func Start(ctx context.Context, cancelAll context.CancelFunc) error {
 		return err
 	}
 	////////////////////////////////////////////////////////////////
-	// add additional services here if needed
-	example.ExampleMiningCreateFunction()
-
 	return nil
 
 }

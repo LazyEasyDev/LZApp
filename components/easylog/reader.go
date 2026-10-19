@@ -27,10 +27,10 @@ var logFilePattern = regexp.MustCompile(`^(debug|info|warn|err)_(\d{8})_([0-9]+)
 var errLogRecordTooLong = errors.New("log record exceeds maximum size")
 
 type ReadOptions struct {
-	Directory         string
-	DirectoryRelative string
-	Level             string
-	Tail              int
+	BaseDirectory         string
+	BaseDirectoryRelative string
+	Level                 string
+	Tail                  int
 }
 
 type storedRecord struct {
@@ -53,7 +53,7 @@ func Show(writer io.Writer, options ReadOptions) error {
 		return fmt.Errorf("tail must be positive")
 	}
 
-	directory, err := ResolveDirectory(options.Directory, options.DirectoryRelative)
+	baseDirectory, err := ResolveBaseDirectory(options.BaseDirectory, options.BaseDirectoryRelative)
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func Show(writer io.Writer, options ReadOptions) error {
 		return err
 	}
 
-	records, err := readRecords(filepath.Join(directory, "logs"), prefix, options.Tail)
+	records, err := readRecords(filepath.Join(baseDirectory, "logs"), prefix, options.Tail)
 	if err != nil {
 		return err
 	}

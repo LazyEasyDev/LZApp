@@ -20,7 +20,7 @@ func Init(logConfig *log_config.LogConfig) error {
 	if err != nil {
 		return err
 	}
-	directory, err := ResolveDirectory(logConfig.Directory, logConfig.DirectoryRelative)
+	baseDirectory, err := ResolveBaseDirectory(logConfig.BaseDirectory, logConfig.BaseDirectoryRelative)
 	if err != nil {
 		return err
 	}
@@ -30,7 +30,7 @@ func Init(logConfig *log_config.LogConfig) error {
 			Level:     level,
 			AddSource: logConfig.AddSource,
 		},
-		File: &EasyLog.FileOptions{BaseDirectory: directory},
+		File: &EasyLog.FileOptions{BaseDirectory: baseDirectory},
 	}
 	if logConfig.ToTerminal {
 		options.Terminal = &EasyLog.TerminalOptions{Writer: os.Stderr}
@@ -43,26 +43,26 @@ func Close() error {
 	return EasyLog.Close()
 }
 
-func ResolveDirectory(directory, relativeTo string) (string, error) {
-	if directory == "" {
-		return "", fmt.Errorf("log directory is required")
+func ResolveBaseDirectory(baseDirectory, relativeTo string) (string, error) {
+	if baseDirectory == "" {
+		return "", fmt.Errorf("log base_directory is required")
 	}
 	if relativeTo != "" && relativeTo != "cwd" && relativeTo != "app" {
-		return "", fmt.Errorf("log directory_relative must be app or cwd, got %q", relativeTo)
+		return "", fmt.Errorf("log base_directory_relative must be app or cwd, got %q", relativeTo)
 	}
-	if filepath.IsAbs(directory) {
-		return filepath.Clean(directory), nil
+	if filepath.IsAbs(baseDirectory) {
+		return filepath.Clean(baseDirectory), nil
 	}
 	if relativeTo == "app" {
 		executable, err := os.Executable()
 		if err != nil {
 			return "", fmt.Errorf("resolve application directory: %w", err)
 		}
-		return filepath.Join(filepath.Dir(executable), directory), nil
+		return filepath.Join(filepath.Dir(executable), baseDirectory), nil
 	}
-	resolved, err := filepath.Abs(directory)
+	resolved, err := filepath.Abs(baseDirectory)
 	if err != nil {
-		return "", fmt.Errorf("resolve log directory: %w", err)
+		return "", fmt.Errorf("resolve log base directory: %w", err)
 	}
 	return resolved, nil
 }

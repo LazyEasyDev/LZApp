@@ -35,12 +35,12 @@ func newDefaultConfig() AppConfig {
 	return AppConfig{
 		Profile: ProfileRelease,
 		Log: &log_config.LogConfig{
-			Directory:         "logs",
-			DirectoryRelative: "app",
-			ToTerminal:        true,
-			ShowLogTail:       10,
-			AddSource:         false,
-			Level:             "info",
+			BaseDirectory:         ".",
+			BaseDirectoryRelative: "app",
+			ToTerminal:            true,
+			ShowLogTail:           10,
+			AddSource:             false,
+			Level:                 "info",
 		},
 		Cache: &lcache_config.LocalCacheConfig{
 			MaxTTLSeconds: 24 * 60 * 60,
@@ -99,9 +99,9 @@ func InitConfig(profile Profile) {
 
 	switch profile {
 	case ProfileDebug:
-		currentAppConfig = &debugAppConfig
+		currentAppConfig = &DebugAppConfig
 	case ProfileRelease:
-		currentAppConfig = &releaseAppConfig
+		currentAppConfig = &ReleaseAppConfig
 	default:
 		return
 	}
