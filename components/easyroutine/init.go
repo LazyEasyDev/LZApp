@@ -20,5 +20,10 @@ func Init(ctx context.Context, sqlDB *sql.DB) error {
 	}); err != nil {
 		return fmt.Errorf("initialize MySQL lease: %w", err)
 	}
+
 	return nil
+}
+
+func Close() {
+	EasyRoutine.Close()
 }
