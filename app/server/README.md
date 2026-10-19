@@ -25,6 +25,11 @@ user-list endpoint is `/admin/users/list`, not `/base/admin/users/list`.
 
 ## Built-in features
 
+Request validation errors include an optional `errors` array with `location` and
+`message` for each failed rule. Rejected values and unstructured underlying errors
+are not included. Additional diagnostics are limited to HTTP 400/422 responses;
+authentication and server errors retain their existing summary-only format.
+
 The [base](base/) directory contains the functionality shared across applications:
 
 | Feature | What it provides | Main endpoints |
