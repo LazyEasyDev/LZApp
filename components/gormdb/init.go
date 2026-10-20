@@ -79,9 +79,10 @@ func New(ctx context.Context, dbConfig *db_config.DBConfig) (*gorm.DB, error) {
 
 func newLogger(level gormlogger.LogLevel) gormlogger.Interface {
 	return gormlogger.NewSlogLogger(slog.Default(), gormlogger.Config{
-		LogLevel:             level,
-		SlowThreshold:        slowQueryThreshold,
-		ParameterizedQueries: true,
+		LogLevel:                  level,
+		SlowThreshold:             slowQueryThreshold,
+		ParameterizedQueries:      true,
+		IgnoreRecordNotFoundError: true,
 	})
 }
 
